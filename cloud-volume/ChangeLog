@@ -1,0 +1,829 @@
+CHANGES
+=======
+
+0.50.0
+------
+
+* Version 0.50.0
+* feat: delete black uploads flag (#212)
+* docs: add link to public dataset examples
+* docs: update README
+* docs: add description of CloudVolume to \_\_init\_\_.py
+* chore: update ChangeLog AUTHORS
+
+0.49.3
+------
+
+* Version 0.49.3
+* perf: omit a network request when creating a GCS connection (#223)
+* perf: improve initialization performance of CV
+
+0.49.2
+------
+
+* Version 0.49.2
+* fix: http(s) should handle 404 like gs and s3
+
+0.49.1
+------
+
+* Version 0.49.1
+* feat: Support for GCS Batch Delete (#219)
+* docs: fix typo on autocrop (should be False, not True)
+* chore: update Trove classifiers, add markdown description classification
+* Add allow\_cropped flag to CloudVolume.download\_point (#215)
+* docs: replace npm server with vol.view() in documentation
+
+0.49.0
+------
+
+* Version 0.49.0
+* docs: added neuroglancer view server invocation to examples
+* feat: neuroglancer compatible link with vol.view() (#214)
+* docs: remove obsolete downsample parameter
+* docs: underlying -> chunk\_size, download\_point
+* fix: upgrade urllib3 (#213)
+
+0.48.0
+------
+
+* Version 0.48.0
+* feat: download\_point lets you download a cutout from just a coordinate
+* refactor: remove deprecated "output\_to\_shared\_memory" parameter
+* feat: export Vec class for use in other applications
+* misc enhancements (#209)
+* fix: missing protocol in error message
+
+0.47.5
+------
+
+* Version 0.47.5
+* feat: create\_new\_info accepts numpy datatypes for 'data\_type'
+* fix: color jpeg encoding support (#210)
+* fix: FutureWarning on type coercion
+* chore: prophylactic to avoid accidently uploading secrets
+* fix: more robust dtype detection
+* fix: select single channel in save\_images (#207)
+
+0.47.4
+------
+
+* Version 0.47.4
+* feat: more robust provenance refreshes (#205)
+* changing to an os independant character (#204)
+
+0.47.3
+------
+
+* Version 0.47.3
+* fix: add exp backoff to connection creation in connection pool
+
+0.47.2
+------
+
+* Version 0.47.2
+* perf: 1.5-2x faster CloudVolume on Google Cloud Storage (#202)
+
+0.47.1
+------
+
+* Version 0.47.1
+* chore: make sure intern is bumped to the latest version 0.9.13
+* chore: drop python 3.4 testing
+* chore: remove old python builds deployment
+* fix: Bbox.volume() would easily overflow
+* fix(from\_numpy): add boolean and use floating abstract dtype (#200)
+
+0.47.0
+------
+
+* Version 0.47.0
+* docs: Updated CloudVolume docstring
+* fix: from\_numpy error when using multiple mip levels (#197)
+* docs: Python 2.7 EOL statement + pretty up "Spinoff Projects"
+
+0.46.0
+------
+
+* Version 0.46.0
+* feat: Bbox.from\_delta
+* chore: fpzip 1.1.3 compatibility (#196)
+* fix: more robust SWC importer
+
+0.45.0
+------
+
+* Version 0.45.0
+* feat: from\_numpy function to create a Precomputed Volume (#188)
+* add support for default region (#195)
+* docs: update ChangeLog
+
+0.44.2
+------
+
+* Version 0.44.2
+* docs: add bool as a supported uViewer data type
+* docs: fix display of segmentation in uViewer
+* feat(uViewer): convert 64-bit int data to float64 for display w/ warning
+* refactor(uViewer): remove redundant branch logic
+* fix(uViewer): infinite and nan value handling
+* feat: support boolean arrays in microviewer
+* docs: update AUTHORS and ChangeLog
+
+0.44.1
+------
+
+* Version 0.44.1
+* feat: retry for Storage.list\_files
+* fix(save\_images): typo (#193)
+
+0.44.0
+------
+
+* Version 0.44.0
+* feat: Bbox serialize, deserialize, to\_dict, from\_dict
+* add a little bit comments; add support for environment variables (#185)
+* adding a chunk based duplicate vertex removal function (#182)
+
+0.43.1
+------
+
+* Version 0.43.1
+* fix: numpy 1.16.0 disallows write=True on string buffers
+* fix: remove uniqueItems from layer provenance schema
+
+0.43.0
+------
+
+* Version 0.43.0
+* feat(skeletonservice): joint preserving downsample (#177)
+
+0.42.3
+------
+
+* Version 0.42.3
+* fix: single mesh id save adds file suffix if filepath is None
+* fix: ensure fused mesh construction order stability
+* fix: make mesh vertices a uniform float32 array
+
+0.42.2
+------
+
+* Version 0.42.2
+* fix: https get\_files
+* chore: tab size 2 for test\_storage.py
+* docs: upload ChangeLog
+
+0.42.1
+------
+
+* Version 0.42.1
+* perf(meshservice): multithreaded mesh manifests (#176)
+
+0.42.0
+------
+
+* Version 0.42.0
+* fix: close requests streams  (#173)
+* feat: support ellipsis operator
+* fix: allow numpy scalar types for cloudvolume access
+* feat(uviewer): cast 2D and 4D images to 3D automatically
+* refactor(lib): remove unused list\_shape function
+* fix: accomodate python2.7 in Bbox division
+* test: bbox.subvoxel() vs pathological behavior of bbox.volume()
+* feat: support dtype on Bbox
+* fix: tests for subvoxel bounding box size were faulty
+* feat: vol.skeleton.get now accepts multiple segids
+
+0.41.0
+------
+
+* Version 0.41.0
+* allow reestablishing viewer server in the same python session (#169)
+* feat(skeletonservice): upload takes PrecomputedSkeleton as input
+
+0.40.4
+------
+
+* Version 0.40.4
+* perf(skeletonservice): faster component search ~3x
+* perf(skeletonservice): faster cable\_length operator
+
+0.40.3
+------
+
+* Version 0.40.3
+* fix: multiprocess upload crashes on thin non-aligned images (#168)
+* Bbox Upgrades (#167)
+
+0.40.2
+------
+
+* Version 0.40.2
+* feat(storage): Batch requests for GCS files\_exist() (#165)
+* docs: formatting
+* docs: info on serving local files
+* fix(skeletonservice): downsample was blowing stack
+
+0.40.1
+------
+
+* Version 0.40.1
+* perf(skeletonservice): made rendering components much faster
+* perf(skeletonservice): faster rendering of components
+* fix(skeletonservice): \_compute\_components wasn't treating loops correctly
+* refactor: moved skeleton exceptions into exceptions.py
+* feat: add chunk size info to non\_aligned\_write error message
+
+0.40.0
+------
+
+* Version 0.40.0
+* fix: transfer\_to retains Content-Type and respects existing info. (#157)
+* feat: cable\_length, downsample, improved Consolidation, SWC file support, connected components (#152)
+* vol.mesh.save() refactor path code (#158)
+* docs: update ChangeLog
+
+0.39.0
+------
+
+* Version 0.39.0
+* fix: uViewer hotkeys work for lower and upper case
+* feat: floating point images handle infinity and NaN in uViewer
+
+0.38.0
+------
+
+* Version 0.38.0
+* feat: add encoding parameter to "add\_scale"
+* feat: Storage works for any path, not just Neuroglancer paths (#154)
+* fix: ./, stepping 2 at a time in uViewer
+* feat: add offset to view in uViewer
+* test: s3 parallel read
+* docs: added reference to Google Storage setup
+* Update README.md
+* fix: uViewer automatically uses image resolution
+* Update README.md
+* docs: updated pip installation instructions
+* docs: link to SfN 2018 poster
+* Revert "fix: VolumeCutout slices generate real VolumeCutouts"
+* fix: VolumeCutout slices generate real VolumeCutouts
+* fix: to\_volumecutout deals with slices cutouts gracefully
+
+0.37.4
+------
+
+* Version 0.37.4
+* docs: fixed spelling error
+* fix: support floating point images in hyperview
+
+0.37.3
+------
+
+* Version 0.37.3
+* docs: links to fpzip and compressed\_segmentation repos
+* refactor: use new compressed-segmentation pypi package
+
+0.37.2
+------
+
+* Version 0.37.2
+* fix: microviewer was not installed correctly on anaconda
+* feat: added UI updates and resolution option to viewer invocation
+* Update README.md
+
+0.37.1
+------
+
+* Version 0.37.1
+* feat: added "selected segments" to microviewer
+* feat: change title of microviewer depending on layer and mode
+* Update README.md
+
+0.37.0
+------
+
+* Version 0.37.0
+* Specifying mip level by voxel resolution (#151)
+* chore: rename volumeviewer to microviewer
+* chore: add MANIFEST.in to ensure microviewer inclusion
+* feat: MicroViewer (#150)
+* Update README.md
+
+0.36.2
+------
+
+* Version 0.36.2
+* fix: last update broke VolumeCutout.save\_images()
+
+0.36.1
+------
+
+* Version 0.36.1
+* fix: forgot to import lib.Bbox in skeletonservice.py
+
+0.36.0
+------
+
+* Version 0.36.0
+* feat: add merge, crop, and from\_path to PrecomputedSkeleton
+
+0.35.0
+------
+
+* Version 0.35.0
+* feat: skeleton consolidation, equivalence, and equality operators (#147)
+* Update README.md
+
+0.34.4
+------
+
+* Version 0.34.4
+* chore: bump fpzip to 1.1.1
+* fix: skeleton upload supports vertex types
+
+0.34.3
+------
+
+* Version 0.34.3
+* chore: comply with updated fpzip treatment of memory order
+* chore: bump version of python-jsonschema-objects
+* docs: update changelog
+
+0.34.2
+------
+
+* Version 0.34.2
+* fix: only reset connection pool when unpicking on a new PID (#145)
+* feat: add setter for scales and scale property. vol.cloudpath alias of vol.layer\_cloudpath
+
+0.34.1
+------
+
+* Version 0.34.1
+* Easy External Multiprocessing (#142)
+
+0.34.0
+------
+
+* Version 0.34.0
+* feat: chunk\_size argument for add\_scale
+
+0.33.4
+------
+
+* Version 0.33.4
+* chore: bump intern to 0.9.10
+
+0.33.3
+------
+
+* Version 0.33.3
+* feat: added "chunk\_size" attribute as synonym for "underlying"
+* chore: bump intern to no\_cache fixed version
+
+0.33.2
+------
+
+* Version 0.33.2
+* fix: didn't handle vertices=None correctly in PrecomputedSkeleton
+
+0.33.1
+------
+
+* Version 0.33.1
+* fix: allow for empty skeleton creation
+
+0.33.0
+------
+
+* Version 0.33.0
+* feat: PrecomputedSkeleton.empty()
+* docs: added http and matrix to documentation
+* Update README.md
+
+0.32.0
+------
+
+* Version 0.32.0
+* feat(meshservice): Faster mesh processing + PLY support (#138)
+
+0.31.3
+------
+
+* Version 0.31.3
+* feat: use new no\_cache argument for BOSS
+* chore: upgrade intern
+* feat: bump zfill to 3 in save\_images
+
+0.31.2
+------
+
+* Version 0.31.2
+* feat(meshservice): Remove duplicate vertices (#137)
+
+0.31.1
+------
+
+* Version 0.31.1
+* fix: failing test for transfer\_to (the test was wrong)
+* docs: updated changelog
+* feat: upgrade 'matrix' protocol to encrypted (https)
+
+0.31.0
+------
+
+* Version 0.31.0
+* feat: skeletonservice upload\_multiple
+* feat: add compress argument to transfer\_to
+* docs: updated changelog
+
+0.30.2
+------
+
+* Version 0.30.2
+* chore: bump tenacity to be python3.7 compliant
+* docs: updated installation instructions for Anaconda
+
+0.30.1
+------
+
+* Version 0.30.1
+* fix: skeleton upload respects cdn\_cache setting
+* feat: add mip information to non-aligned writes
+
+0.30.0
+------
+
+* Version 0.30.0
+* feat: transfer\_to implementation (#135)
+* fix: create\_new\_info supports skeletons correctly
+
+0.29.0
+------
+
+* Version 0.29.0
+* docs: documented the save\_images function
+* feat: add global normalization option to save\_images
+* feat: handle 3d arrays in save\_images
+* feat: support boolean images in save\_images
+
+0.28.3
+------
+
+* Version 0.28.3
+* chore: upgrade fpzip to 1.0.4
+
+0.28.2
+------
+
+* Version 0.28.2
+* Wms fix fpzip install (#134)
+
+0.28.1
+------
+
+* Version 0.28.1
+* fix: memory leak in compressed\_segmentation.pyx decompression
+* Update README.md
+
+0.28.0
+------
+
+* Version 0.28.0
+* refactor: Use fpzip PyPI package (#133)
+* feat: independent control of cache compression (#132)
+* feat: initialization of the "matrix" protocol. (#128)
+
+0.27.1
+------
+
+* Version 0.27.1
+* chore(requirements.txt): replace deprecated google-cloud (#131)
+
+0.27.0
+------
+
+* Version 0.27.0
+* feat: bbox\_to\_mip (#127)
+
+0.26.3
+------
+
+* Version 0.26.3
+* fix: add compressed\_segmentation\_block\_size support to create\_new\_info
+
+0.26.2
+------
+
+* Version 0.26.2
+* feat: added radii and swc vertex attrs to skeleton binary format (#123)
+
+0.26.1
+------
+
+* Version 0.26.1
+* fix: support compressed\_segmentation\_block\_size in add\_scale
+* docs: thank C++ compressed\_segmentation authors
+* Version 0.26.0
+* feat: compressed segmentation C extension (#121)
+* docs: changelog
+
+0.25.1
+------
+
+* Version 0.25.1
+* chore: upgrade tenacity to 4.10.0 for python 3.7 compatibility (#125)
+* Update README.md
+* Update README.md
+* Update README.md
+* Update README.md
+* docs: added install info for fpzip and more acknowledgements
+* Update README.md
+* Update README.md
+
+0.25.0
+------
+
+* Version 0.25.0
+* feat: add fpzip encoding C extension (+ "kempression") (#117)
+* docs: added flush\_info and flush\_provenance to examples
+* feat: added vol.cache.flush\_info() and vol.cache.flush\_provenance()
+* fix: add intelligible error when skeletons don't exist
+
+0.24.0
+------
+
+* Version 0.24.0
+* feat: vol.skeleton for accessing Neuroglancer skeletons (#120)
+* Update README.md
+* feat: cleanup shared memory on SIGTERM or SIGINT (#115)
+* Update README.md
+* Version 0.23.0
+* feat: specify C or Fortran order in upload\_from\_shared\_memory (#113)
+
+0.22.0
+------
+
+* Version 0.22.0
+* docs: updated README with new download\_to\_shared\_memory method
+* perf: 1x memory usage for parallel downloads (#112)
+* refactor: output\_to\_shared\_memory -> download\_to\_shared\_memory() (#111)
+
+0.21.2
+------
+
+* Version 0.21.2
+* fix: make futures conditional on python 2 (#110)
+* docs: made the roles of Igneous and CloudVolume more clear
+* docs: reorganized new dataset creation
+* docs: added information on bucket-specific credentials
+* docs: updated README.md narrative
+
+0.21.1
+------
+
+* Version 0.21.1
+* fix: use concurrent.futures.ProcessPoolExecutor vs mp.Pool (#108)
+
+0.21.0
+------
+
+* Version 0.21.0
+* feat: Http(s) Storage interface
+
+0.20.2
+------
+
+* Version 0.20.2
+* fix: add legacy support for \*\_credentials\_path
+
+0.20.1
+------
+
+* Version 0.20.1
+* feat: supporting bucket specific secrets for aws and google
+* fix: add save\_images visualization support for float32 and float64
+
+0.20.0
+------
+
+* Version 0.20.0
+* feat: Storage now has put\_json and get\_json
+
+0.19.1
+------
+
+* Version 0.19.1
+* fix: tqdm race condition "AttributeError: 'tqdm' object has no attribute 'pos'" (#104)
+* docs: updated benchmarks for test\_v0, mip 0, parallel 1
+* docs: fixed misspelling in comment
+
+0.19.0
+------
+
+* Version 0.19.0
+* feat: upload from shared memory (#101)
+* perf: change BOSS calls to fortran order as well
+
+0.18.0
+------
+
+* Version 0.18.0
+* perf: use fortran order internally in numpy arrays (#99)
+* docs: added some acknowledgements for important code and intellectual contributions by third parties
+
+0.17.0
+------
+
+* Version 0.17.0
+* feat: parallel uploads (#98)
+
+0.16.0
+------
+
+* fix: updated setversion.py to not clobber
+* Python Compressed Segmentation Codec (#95)
+* feat: shared memory emulation using the filesystem for OSX (#97)
+* feat: script to help set versions and tags
+* fix: errors closing mmap handle (\_\_del\_\_ not existing as a superclass method?)
+* fix: errors closing mmap handle (\_\_del\_\_ not existing as a superclass method?)
+* feat: added \_\_version\_\_ to cloudvolume
+* Update README.md
+* docs: updated README to discuss parallel, shared memory, non\_aligned\_writes
+
+0.15.0
+------
+
+* feat: parallel download + shared memory output (#94)
+* refactor: use txrx.shade instead of reinventing the wheel + BOSS tests
+
+0.14.0
+------
+
+* feat: Added non-aligned chunk uploads. (#92)
+* Update README.md
+* Update README.md
+* Update README.md
+* Update README.md
+
+0.13.0
+------
+
+* feat: preserve option for fush\_cache + flush\_cache\_region (#86)
+* Update README.md
+* Changing the docs a bit (#91)
+
+0.12.3
+------
+
+* fix: added reset\_connection\_pools to storage.py (#90)
+
+0.12.2
+------
+
+* fix: s3 listing was limited to 1000 files (#89)
+* Update README.md
+
+0.12.1
+------
+
+* fix: bounds check for short end chunks
+* Update README.md
+* Update README.md
+* docs: updated README for autocrop
+
+0.12.0
+------
+
+* Autocrop (#81)
+
+0.11.0
+------
+
+* Reduce Memory Usage for Non-Aligned Downloads (#79)
+
+0.10.4
+------
+
+* feat: more informative error message for non-compliant cloudpaths
+
+0.10.3
+------
+
+* fix: slices\_from\_global\_coords was not computing maxsize properly
+* feat: added support for downloading different MIPs from BOSS (#73)
+
+0.10.1
+------
+
+* feat: exported ConnectionPools
+
+0.10.0
+------
+
+* feat: removed requirement for project\_name file
+
+0.9.0
+-----
+
+* Concurrent painting w/ Download & Upload (Save image size worth of memory) (#69)
+* docs: memory usage graphs for image and segmentation download
+* docs: example memory profile of running pytest
+* feat: more memorable colors for plots
+* feat: sorted plots for benchmark
+* docs: benchmark data and plotting for gcloud
+* Performance Benchmark (#67)
+* Update README.md
+* feat: added compress option to CloudVolume (#66)
+* fix: force chunk sizes to be integers
+* test+perf: make boss download 1/20th the size
+* test: Changed travis API keys to environment variables
+* chore: liberalized requirements for boto3
+* chore: liberalize Pillow version requirements
+* test: added BOSS test
+* fix: boss bounds were off by one at border + cast cutout to correct type
+* refactor: added vol.mesh interface (#64)
+* refactor: seperate file location computation from fetching
+* fix: Vec.rectVolume was broken in python3
+* feat: slices\_to\_global\_coords + tests
+* chore: expand protobuf dependency qualifications
+* fix: remove unnecessary dependency
+* chore: removed old depencency for google-resumable-media
+* chore: remove unnecessary independent jsonschema dependency
+* chore: fork intern and install from github to resolve dependency issue (#63)
+* fix: make commit\_info more resilent to numpy arrays
+* chore: additional flexibility in requirements
+* fix: added python3 division to Bbox
+* fix: add\_scale in Python3 rendered np.int64
+* fix: python3 xrange compatibility
+* fix: python3 incompatible unicode call in lib.py
+* fix: better error message for missing info file
+* feat: manual control over cache-control headers for uploaded files (#62)
+* fix: file read errors were crashing incorrectly
+* chore: bump google-cloud-python to 0.30.0
+* feat: file:// protocol now supports the ~ prefix for your home dir (#60)
+* feat: better error message for missing mesh manifests (#61)
+* feat: reveal secrets (#58)
+* feat: backwards compatible secrets (#57)
+* feat: pretty print info and provenance files (#56)
+* fix: pool on buckets instead of clients for gcloud (#53)
+* chore: downgrade google-cloud from 0.27 to 0.26.1
+* fix: cache + fill\_missing interaction crash (#52)
+* feat: added cache-control options to Storage (#51)
+* fix: layer\_cloudpath was not handling intermediate paths correctly
+* Optimize Sleep Patterns (#50)
+* fix: save\_mesh supports progress bar
+* Fix gcloud Access in 0.5.0 (#46)
+* feat: negative index downloads (#45)
+* feat: CloudVolume supports intermediate paths (#38)
+* Optionally pass provenance to CloudVolume constructor (#41)
+* Wms test metadata (#44)
+* Fix Double Upload (#43)
+* feat: provenance files are now decoded with the json5 module (#40)
+* Update README.md
+* fix: missing support for progress and caching for delete and exists
+* docs: Added exists, delete, cache, and progress to README.md
+* feat: delete bounding boxes on a given mip level (#35)
+* feat: backwards compatibility with ~/.neuroglancer (#33)
+* feat: added cache flag to CloudVolume (#12)
+* feat: progress flag for CloudVolume, Storage (#21)
+* feat: add support for intermediate paths in URIs (#30)
+* feat: CloudVolume.exists (#14)
+* fix: python3 compatibility (#25)
+* test: deconflict parallel storage tests (#19)
+* docs: CloudVolume methods, mip\_ functions, and VolumeCutout in README.md
+* docs: added additional CloudVolume init examples
+* docs: added boss-secret.json to docs
+* docs: added property list to README.md
+* feat: exported several useful libraries
+* feat(Provenance): added support for data layer provenance (#6)
+* feat: added exponential window random retry to Storage (#5)
+* feat: python3 support (#4)
+* Update README.md
+* fix: removed scipy from requirmements list
+* docs: formatting README.md
+* docs: added BOSS and virtualenvwrapper to README
+* docs: added save\_mesh to the README
+* fix: compress for raw and compressed\_encoding
+* fix: added chardet to requirements.txt
+* fix: added missing items to requirements.txt
+* feat(BOSS): added reading and writing capability to BOSS MIP 0
+* fix: upgraded urllib3 to urllib3[secure]
+* feat: added connection pools
+* fix: google secrets is only read from disk once
+* feat: support saving equivalences as a single obj
+* feat: added get\_mesh, save\_mesh to CloudVolume
+* chore: bumped google-cloud to 0.27 from 0.26
+* test: chunks.py now has some tests
+* docs: added more detailed insallation instructions to README.md
+* test(secrets): added API keys for Storage
+* fix(ThreadedQueue): ensure processed matches task\_done
+* test: added travis config file
+* docs: updated setup.cfg info
+* feat(VolumeCutout): prepend 0 to single digit numbers
+* chore: added saved\_images to .gitignore
+* fix: missing PIL import
+* refactor(CloudVolume): clean up package import namespace
+* feat(CloudVolume): created minimal implementation
+* Initial commit

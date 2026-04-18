@@ -1,0 +1,4 @@
+[submodule "cloud-volume"]
+	path = cloud-volume
+	url = git@github.com:P11011/cloud-volume.git
+	branch = compressed_block

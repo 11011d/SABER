@@ -1,0 +1,127 @@
+CHANGES
+=======
+
+2.3.2
+-----
+
+* ci: update to upload-artifacts v4
+* ci: update packaging
+* ci: skip i686
+* ci: add twine install
+* ci: bump pkginfo
+* ci: update build for py313 and new artifact uploader
+* fix: uint64 handling in single voxel accesses
+
+2.3.1
+-----
+
+* ci: rebuild for numpy 2.0
+
+2.3.0
+-----
+
+* ci: update cibuildwheel
+* perf+refactor: avoid extra copy during decompress
+* docs: update hyperlink
+
+2.2.2
+-----
+
+* build: update build for py312
+* build: update for py312
+
+2.2.1
+-----
+
+* config: update formatting of setup.cfg
+* build: update build to use pyx and easier numpy install
+* test: py38, 39, 310, 311
+* build: update build for py311
+* fix: bundle cseg\_cli
+
+2.2.0
+-----
+
+* docs: update date
+* docs: show how to use remap
+* feat: remap (#9)
+
+2.1.1
+-----
+
+* install: ensure windows compiles in release mode
+* fix: empty random access (#8)
+* chore: update TROVE identifiers
+
+2.1.0
+-----
+
+* fix: add bounds check for get
+* fix: missing x offset in bitpos
+* refactor: change volume\_size to shape
+* docs: add highlights
+* docs: show how to use CompressedSegmentationArray
+* fix: add default block size to constructor
+* feat: adds CompressedSegmentationArray class for random access to voxels
+* fix: handle empty data streams
+* feat: adds cseg.labels function (#7)
+* feat: add CLI  (#6)
+* refactor: figured out how to unify 32 and 64 bit functions w/ dummy var (#5)
+* chore: add changelog
+* docs: pretty up header
+
+2.0.1
+-----
+
+* release(2.0.1): fixes additional swaps in C/F order
+* chore: update Changelog
+* fix: several inversions of F and C order
+
+2.0.0
+-----
+
+* release(2.0.0): compression safeguards, sensible order parameter, handles zero dimension
+* test(perf.py): add block sizes to performance testing
+* test: check for header integrity
+* test: add block size to random testing
+* fix: ordering didn't make sense (#3)
+* fix: remove "cloudvolume" from automated testing
+* docs: discuss data-dependent limitation of format
+* test: add automated testing to appveyor
+* test: adjust "normal" test to avoid triggering OverflowError
+* test: ensure safeguards for table offset actually work
+* fix: make overflow error intelligible to python
+* fix(compress\_segmentation): check that table offset is valid before writing
+* test: add explicit test for zero size
+* fix: handle null dimensions (#1)
+* fix: naming collision for kBlockHeaderSize (#2)
+* chore: remove extraneous Dockerfile
+* fix(Dockerfiles): remove references to non-existent tests
+
+1.0.1
+-----
+
+* release(1.0.1): releasing new set of binaries with a new build system
+* chore: add appveyor.yml
+* chore: add py38 to docker build
+* chore: set readme type as markdown
+* Update README.md
+* docs: update doc string and add pip installation instructions
+* docs: add PyPI badge
+
+1.0.0
+-----
+
+* feat: added ability to specify memory order for decompress
+* test: add very basic test of correctness
+* chore: cleanup go files
+* chore: infrastructure for building packages
+* fix: memory leak in cython bindings
+* feat: add Cython bindings and compilation directives
+* Update README.md
+* adds go implementation; fixes bug in c++ decompression and modifies test
+* Update README.md
+* adds seg decompress and tests
+* cleans up more of the compress\_segmentation interface
+* simplifies interface for compress segmentation
+* initial commit (copies source code from neuroglancer project)
