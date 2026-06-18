@@ -8,48 +8,48 @@ cv2.setNumThreads(0)
 
 class CompressedVoxelContainer:
     def __init__(self, requested_bbox, full_bbox, block_size: Tuple[int, int, int], dtype: np.dtype):
-        # 1. 空间属性定义
+        # 1. Spatial attribute definitions.
         self.requested_bbox = requested_bbox
         self.full_bbox = full_bbox
         self.block_size = np.array(block_size)
         self.dtype = np.dtype(dtype)
         
-        # 2. 核心坐标变换向量 (Query -> Physical)
+        # 2. Core coordinate transform vector (Query -> Physical).
         # px = qx + query_to_phys_offset
         self.query_to_phys_offset = np.array(requested_bbox.minpt) - np.array(full_bbox.minpt)
         
-        # 3. 物理网格属性
-        # grid_size 定义了基于 full_bbox 的网格维度 (nx, ny, nz)
+        # 3. Physical grid properties.
+        # grid_size defines the grid dimensions derived from full_bbox (nx, ny, nz).
         self.grid_size = (np.array(full_bbox.size3()) // self.block_size).astype(np.int64)
         self.total_blocks = np.prod(self.grid_size)
         
-        # 4. 存储容器：改用 C++ 管理的 PyBlockStore
+        # 4. Storage container: use the C++-managed PyBlockStore.
         self.blocks = cseg.PyBlockStore(int(self.total_blocks), self.dtype)
 
     def _to_phys_coord(self, q_coord: np.ndarray) -> np.ndarray:
-        """将用户请求空间的像素坐标转换为物理 full_bbox 空间的像素坐标"""
+        """Convert voxel coordinates from request space to physical full_bbox coordinates."""
         return q_coord + self.query_to_phys_offset
 
     def _get_block_id_from_phys(self, p_coord: np.ndarray) -> int:
-        """从物理像素坐标计算 Block ID"""
+        """Compute the block ID from a physical voxel coordinate."""
         grid_idx = p_coord // self.block_size
         # F-order: x + y*nx + z*nx*ny
         return int(grid_idx[0] + grid_idx[1] * self.grid_size[0] + grid_idx[2] * self.grid_size[0] * self.grid_size[1])
 
     def query_point(self, qx: int, qy: int, qz: int):
-        """查询单个点：逻辑坐标 (0,0,0) 代表请求区域起点"""
+        """Query a single point: logical coordinate (0,0,0) is the request-region origin."""
         p_coord = self._to_phys_coord(np.array([qx, qy, qz]))
         block_id = self._get_block_id_from_phys(p_coord)
         
         if 0 <= block_id < self.total_blocks:
-            block = self.blocks[block_id]  # PyBlockStore.__getitem__ 返回 dict
+            block = self.blocks[block_id]  # PyBlockStore.__getitem__ returns a dict.
             if block:
                 inner_offset = p_coord % self.block_size
                 return block, inner_offset
         return None, None
 
     def query_interval_blocks(self, q_min: Tuple[int, int, int], q_max: Tuple[int, int, int]) -> List[int]:
-        """查询一个区间：返回该区间覆盖的所有物理 Block ID"""
+        """Query an interval and return all physical block IDs covered by it."""
         p_min = self._to_phys_coord(np.array(q_min))
         p_max = self._to_phys_coord(np.array(q_max))
         
@@ -69,7 +69,7 @@ class CompressedVoxelContainer:
 
     def get_raw_data(self, q_min: Tuple[int, int, int], q_max: Tuple[int, int, int]):
         """
-        获取逻辑空间指定范围内的原始数据 (NumPy 数组)
+        Fetch raw data for the requested range in logical space as a NumPy array.
         """
         p_min = self._to_phys_coord(np.array(q_min))
         p_max = self._to_phys_coord(np.array(q_max))
@@ -80,7 +80,7 @@ class CompressedVoxelContainer:
 
         block_ids = self.query_interval_blocks(q_min, q_max)
         
-        # 非热路径：用旧接口兼容（通过 PyBlockStore.__getitem__ 获取 dict 列表）
+        # Non-hot path: keep compatibility with the legacy interface via PyBlockStore.__getitem__.
         block_data_list = [self.blocks[bid] for bid in block_ids]
 
         aligned_buffer = cseg.decompress_block_grid(
@@ -100,11 +100,11 @@ class CompressedVoxelContainer:
             rel_start[2]:rel_end[2]
         ]
     
-    # 测试使用
+    # For testing.
     def get_all_blocks_dense(self):
         """
-        [测试与诊断专用]
-        无视一切请求坐标，直接将当前容器底层的所有 Blocks 强行解压为稠密 NumPy 矩阵。
+        [For testing and diagnostics only]
+        Ignore request coordinates and decompress all underlying blocks in the container into a dense NumPy array.
         """
         return cseg.decompress_block_grid_store(
             self.blocks,
@@ -115,14 +115,14 @@ class CompressedVoxelContainer:
     
     def where(self, segid: int, true_val: int, false_val: int, out_dtype=None):
         """
-        高斯能压缩态条件筛选器 (np.where 的高性能替代方案)。
-        直接操作 C++ BlockArena，跳过所有 Python dict 操作。
+        A compressed-domain conditional filter, serving as a high-performance alternative to np.where.
+        It operates directly on the C++ BlockArena and skips all Python dict operations.
         """
         if out_dtype is None:
             out_dtype = self.dtype
         out_dtype = np.dtype(out_dtype)
         
-        # 创建结果容器
+        # Create the result container.
         res = CompressedVoxelContainer(
             self.requested_bbox, 
             self.full_bbox, 
@@ -130,7 +130,7 @@ class CompressedVoxelContainer:
             out_dtype
         )
         
-        # 直接操作 C++ BlockArena
+        # Operate directly on the C++ BlockArena.
         cseg.transform_where_compressed_store(
             self.blocks,
             res.blocks,
@@ -144,7 +144,7 @@ class CompressedVoxelContainer:
         return res
     
     def nearest_nonzero_idx(self, x, y, z):
-        """极速 C++ 找最近种子点（直接使用 BlockArena CBlock*）"""
+        """Find the nearest seed point with the fast C++ path using BlockArena CBlock* directly."""
         return cseg.find_nearest_seed_fast_store(
             self.blocks, 
             tuple(self.grid_size), 
@@ -156,7 +156,7 @@ class CompressedVoxelContainer:
         )
     
     def get_nearest_nonzero_value(self, x, y, z):
-        """封装方法：获取最近非零点的标签值"""
+        """Wrapper method: get the label value of the nearest non-zero point."""
         idx = self.nearest_nonzero_idx(x, y, z)
         if idx is not None:
             val = self.get_raw_data(tuple(idx), tuple(idx + 1))
@@ -165,11 +165,11 @@ class CompressedVoxelContainer:
     
     def keep_nearest_connected_component_optimized(self, center_x, center_y, center_z):
         """
-        直接利用已知种子点执行极致的 C++ BFS，结果原地写回 BlockArena。
+        Use the known seed point to run the optimized C++ BFS, then write the result back to BlockArena in place.
         """
         seed_arr = self.nearest_nonzero_idx(center_x, center_y, center_z)
         if seed_arr is None:
-            # 全部清零：构建单元素零调色板，批量设置
+            # Clear everything by constructing a single-element zero palette and applying it in bulk.
             pal_false = np.array([0], dtype=self.dtype)
             for i in range(int(self.total_blocks)):
                 self.blocks.set_block(i, pal_false, 0, None)
@@ -188,13 +188,13 @@ class CompressedVoxelContainer:
     
     def extract_boundary_points(self, x_off, y_off, z_off, lx, ly, lz, pc_data, ids_data, label=0):
         """
-        重新设计的提取方法：对齐 Slab 处理，C++ 批量解压。
-        （直接使用 fill_slab_buffer_store，传 gz 索引替代 Python 切片）
+        Redesigned extraction method: slab-aligned processing with batched C++ decompression.
+        It calls fill_slab_buffer_store directly and passes the gz index instead of using Python slicing.
         """
         nx_b, ny_b, nz_b = self.grid_size
         bx, by, bz = self.block_size
         
-        # 1. 预申请全平面（Slab）Buffer，复用内存
+        # 1. Preallocate the full slab buffer and reuse it.
         slab_shape = (nx_b * bx, ny_b * by, bz)
         shared_buffer = np.zeros(slab_shape, dtype=self.dtype, order='F')
 
@@ -203,11 +203,11 @@ class CompressedVoxelContainer:
 
         for gz in range(nz_b):
             z_start = gz * bz
-            # 范围剪枝
+            # Range pruning.
             if z_start >= req_end_rel[2]: break
             if z_start + bz <= req_start_rel[2]: continue
 
-            # 2. 极速重置并填充（直接传 gz，避免 Python 切片）
+            # 2. Fast reset and fill, passing gz directly to avoid Python slicing.
             shared_buffer.fill(0)
             cseg.fill_slab_buffer_store(
                 self.blocks, shared_buffer,
@@ -215,7 +215,7 @@ class CompressedVoxelContainer:
                 self.dtype, int(gz)
             )
 
-            # 3. 逐层提取轮廓
+            # 3. Extract contours layer by layer.
             for i_lz in range(bz):
                 abs_z = z_start + i_lz
                 if not (req_start_rel[2] <= abs_z < req_end_rel[2]):

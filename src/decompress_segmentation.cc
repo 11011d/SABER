@@ -273,7 +273,7 @@ void DecompressPartialIntersectionInPlace(const uint32_t* input,
                                           const ptrdiff_t request_start[3],
                                           const ptrdiff_t strides[4],       
                                           Label* output,
-                                          size_t l2cache_size) { // [新增参数]
+                                          size_t l2cache_size) { // Added parameter.
   ptrdiff_t grid_size[3];
   ptrdiff_t block_start[3];
   ptrdiff_t block_end[3];
@@ -286,7 +286,7 @@ void DecompressPartialIntersectionInPlace(const uint32_t* input,
     block_end[i] = (intersection_end[i] + block_size[i] - 1) / block_size[i];
   }
 
-  // 缓存行大小假设为 64 字节，计算每次预取步进的元素个数
+  // Assume a cache line size of 64 bytes and compute the number of elements fetched per prefetch step.
   const size_t CACHE_LINE_BYTES = 64;
   const size_t elements_per_cache_line_out = CACHE_LINE_BYTES / sizeof(Label) > 0 ? CACHE_LINE_BYTES / sizeof(Label) : 1;
   const size_t uint32_per_cache_line = CACHE_LINE_BYTES / sizeof(uint32_t);
@@ -314,7 +314,7 @@ void DecompressPartialIntersectionInPlace(const uint32_t* input,
         const size_t block_offset = block[0] + grid_size[0] * (block[1] + grid_size[1] * block[2]);
 
         // ==========================================
-        // L2 Cache 预取：提前加载下一个 Block 的数据
+        // L2 cache prefetch: load the next block's data ahead of time.
         // ==========================================
         if (l2cache_size > 0) {
           ptrdiff_t nb_x = block[0] + 1;
@@ -340,11 +340,11 @@ void DecompressPartialIntersectionInPlace(const uint32_t* input,
             size_t total_bytes = (next_encoded_words + next_table_words + 2) * sizeof(uint32_t);
 
             if (total_bytes < l2cache_size) {
-              // 预取 Lookup Table (按 Cache Line 步进)
+              // Prefetch the lookup table in cache-line steps.
               for (size_t p = 0; p < next_table_words; p += uint32_per_cache_line) {
                 PREFETCH_READ_L2(&input[next_tableoffset + p]);
               }
-              // 预取压缩位数据
+              // Prefetch the compressed bitstream data.
               for (size_t p = 0; p < next_encoded_words; p += uint32_per_cache_line) {
                 PREFETCH_READ_L2(&input[next_encoded_value_start + p]);
               }
@@ -365,12 +365,12 @@ void DecompressPartialIntersectionInPlace(const uint32_t* input,
             size_t base_outindex = strides[1] * (y+offset[1]) + strides[2] * (z+offset[2]);
             
             // ==========================================
-            // L2 Cache 预取：预热连续写入的 Output 内存
+            // L2 cache prefetch: warm up the output memory for sequential writes.
             // ==========================================
             if (l2cache_size > 0 && strides[0] == 1) {
               size_t outindex_start = base_outindex + (x_loop_start + offset[0]);
               size_t out_elements = x_loop_end - x_loop_start;
-              // 按 Cache Line 步进发出写预取信号，避免 Write-Allocate 造成的停顿
+              // Issue write-prefetches in cache-line steps to avoid write-allocate stalls.
               for (size_t p = 0; p < out_elements; p += elements_per_cache_line_out) {
                 PREFETCH_WRITE_L2(&output[outindex_start + p]);
               }
@@ -550,7 +550,7 @@ void DecompressPartialChannelsIntersectionParallel(std::vector<Request>& request
             }
         }
     } else {
-        // 多线程执行
+        // Multithreaded execution.
         ThreadPool pool(parallel);
         for (auto& req : requests) {
             pool.enqueue([&]() {

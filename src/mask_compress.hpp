@@ -22,7 +22,7 @@ MaskedBlockResult<T> MaskAndRecompressBlock(
     MaskedBlockResult<T> result;
     size_t num_voxels = blksize[0] * blksize[1] * blksize[2];
     
-    // 1. 申请密集矩阵，默认全 0 (背景色)
+    // 1. Allocate a dense buffer, initialized to all zeros (background).
     std::vector<T> dense(num_voxels, 0); 
 
     ptrdiff_t x0 = std::max((ptrdiff_t)0, req_min[0] - b_min[0]);
@@ -34,7 +34,7 @@ MaskedBlockResult<T> MaskAndRecompressBlock(
 
     uint32_t src_mask = (src_bits == 0) ? 0 : ((1 << src_bits) - 1);
 
-    // 2. 局部解压：只读取请求框内部的有效像素
+    // 2. Partial decompression: read only the valid voxels inside the requested box.
     for (ptrdiff_t dz = z0; dz < z1; ++dz) {
         for (ptrdiff_t dy = y0; dy < y1; ++dy) {
             for (ptrdiff_t dx = x0; dx < x1; ++dx) {
@@ -53,7 +53,7 @@ MaskedBlockResult<T> MaskAndRecompressBlock(
         }
     }
 
-    // 3. 构建新的调色盘 (找出独立元素)
+    // 3. Build the new palette (collect unique values).
     std::vector<T> unique_vals;
     unique_vals.reserve(8);
     for (size_t i = 0; i < num_voxels; ++i) {
@@ -67,10 +67,10 @@ MaskedBlockResult<T> MaskAndRecompressBlock(
     result.palette = unique_vals;
     size_t pal_size = unique_vals.size();
 
-    // 4. 确定新的位深 (bits)
+    // 4. Determine the new bit depth (bits).
     if (pal_size <= 1) {
         result.bits = 0;
-        if (pal_size == 0) result.palette = {0}; // 彻底被裁成全 0 了
+        if (pal_size == 0) result.palette = {0}; // Fully masked down to all zeros.
         return result;
     } else if (pal_size <= 2) result.bits = 1;
     else if (pal_size <= 4) result.bits = 2;
@@ -81,7 +81,7 @@ MaskedBlockResult<T> MaskAndRecompressBlock(
         while ((1ULL << result.bits) < pal_size) result.bits *= 2;
     }
 
-    // 5. 重组新位流 (极速原位位运算)
+    // 5. Rebuild the new bitstream with fast in-place bit operations.
     size_t words_needed = (num_voxels * result.bits + 31) / 32;
     result.bitstream.assign(words_needed, 0);
 

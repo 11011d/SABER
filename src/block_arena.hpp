@@ -8,10 +8,10 @@
 #include "mask_compress.hpp"
 #include "../include/extract_blocks.h"
 
-// 每个 Block 的数据所有权存储
+// Ownership storage for each block's data.
 struct StoredBlock {
-    std::vector<uint8_t>  palette_bytes;  // 调色板原始字节
-    std::vector<uint32_t> bitstream;       // 位流数据
+    std::vector<uint8_t>  palette_bytes;  // Raw palette bytes.
+    std::vector<uint32_t> bitstream;       // Bitstream data.
     uint8_t bits;
     bool    has_nonzero;
     bool    is_null;
@@ -19,12 +19,12 @@ struct StoredBlock {
     StoredBlock() : bits(0), has_nonzero(false), is_null(true) {}
 };
 
-// C++ 管理的 Block 存储器
-// - 持久维护 CBlock 指针数组，避免 Python 层重复转换
+// C++-managed block storage.
+// - Persistently maintains the CBlock pointer array to avoid repeated Python-side conversions.
 class BlockArena {
 public:
     int total;
-    int itemsize;  // 调色板每元素字节数 (1/4/8)
+    int itemsize;  // Number of bytes per palette element (1/4/8).
     std::vector<StoredBlock> blocks;
     std::vector<CBlock>      cblocks;
 
@@ -39,7 +39,7 @@ public:
         }
     }
 
-    // 设置一个 Block 的数据（palette 字节数组 + 位流）
+    // Set the data for one block (palette byte array + bitstream).
     void set_block(int idx,
                    const uint8_t* pal, int pal_bytes,
                    uint8_t bits_val,
@@ -59,7 +59,7 @@ public:
         _rebuild_cblock(idx);
     }
 
-    // 将指定 Block 置为空（全零）
+    // Set the specified block to empty (all zeros).
     void set_null(int idx) {
         if (idx < 0 || idx >= total) return;
         auto& b = blocks[idx];
@@ -75,7 +75,7 @@ public:
         cb.bitstream   = nullptr;
     }
 
-    // 批量将所有 Block 设为单元素零调色板（快速清零用）
+    // Set all blocks to a single-element zero palette in bulk (for fast clearing).
     void set_all_false(const uint8_t* false_bytes, int false_nbytes) {
         for (int i = 0; i < total; ++i) {
             auto& b = blocks[i];
@@ -92,10 +92,10 @@ public:
         }
     }
 
-    // 获取预计算的 CBlock 只读数组
+    // Get the precomputed read-only CBlock array.
     const CBlock* get_cblocks() const { return cblocks.data(); }
 
-    // 以下 accessor 供 Cython __getitem__ 使用（非热路径）
+    // The accessors below are used by Cython __getitem__ (non-hot path).
     int     get_bits(int idx)          const { return (idx>=0&&idx<total) ? blocks[idx].bits : 0; }
     bool    get_is_null(int idx)       const { return (idx>=0&&idx<total) ? blocks[idx].is_null : true; }
     bool    get_has_nonzero(int idx)   const { return (idx>=0&&idx<total) ? blocks[idx].has_nonzero : false; }
@@ -199,7 +199,7 @@ inline void ProcessSingleBlockGlobal(
         return;
     }
 
-    // 处理部分相交块 (Partial Block)
+    // Handle partially intersecting blocks (Partial Block).
     MaskedBlockResult<UINT> res = MaskAndRecompressBlock<UINT>(
         b.palette_ptr, b.encoding_bits, b.bitstream_ptr,
         blksize, b_min, local_start, local_end

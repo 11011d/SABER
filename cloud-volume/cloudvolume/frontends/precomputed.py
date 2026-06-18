@@ -571,26 +571,26 @@ class CloudVolumePrecomputed(object):
   
   def json_converter(self, obj):
     """
-    升级后的转换器，可以处理 Vec 和 NumPy 数字类型。
+    Upgraded converter that can handle Vec objects and NumPy numeric types.
     """
-    # 检查是否为 Vec 类型
+    # Check whether the object is a Vec type.
     if isinstance(obj, Vec):
         return list(obj)
-    # 检查是否为任何 NumPy 整数类型 (int8, int16, int64 等)
+    # Check whether the object is any NumPy integer type (int8, int16, int64, and so on).
     if isinstance(obj, np.integer):
-        return int(obj) # <--- 2. 转换为 Python 标准 int
-    # 检查是否为任何 NumPy 浮点数类型 (float32, float64 等)
+        return int(obj) # <--- 2. Convert to a standard Python int.
+    # Check whether the object is any NumPy floating-point type (float32, float64, and so on).
     if isinstance(obj, np.floating):
-        return float(obj) # <--- 3. 转换为 Python 标准 float
-    # 检查是否为 NumPy 数组
+        return float(obj) # <--- 3. Convert to a standard Python float.
+    # Check whether the object is a NumPy array.
     if isinstance(obj, np.ndarray):
-        return obj.tolist() # <--- 4. 转换为 Python 列表
+        return obj.tolist() # <--- 4. Convert to a Python list.
         
-    # 如果都不是，则抛出原始错误
+    # If none of the above matches, raise the original error.
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
   
   def _log_info(self, info_dict: dict):
-    # 检查 log_path 属性是否存在且不为空
+    # Check whether the log_path attribute exists and is non-empty.
     if not hasattr(self, 'log_path') or not self.log_path:
         return
     try:

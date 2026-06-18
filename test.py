@@ -12,7 +12,7 @@ import pandas as pd
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 
-# --- 路径配置 ---
+# --- Path configuration ---
 LOCAL_CLONE = './cloud-volume'
 if os.path.exists(LOCAL_CLONE):
     sys.path.insert(0, LOCAL_CLONE)
@@ -33,17 +33,18 @@ def nearest_nonzero_idx(a, x, y, z):
 
     dists = ((idx - [x, y, z]) ** 2).sum(1)
     min_dist = dists.min()
-    is_unique = int((dists == min_dist).sum()) == 1  # 最近点是否唯一
+    is_unique = int((dists == min_dist).sum()) == 1  # Whether the nearest point is unique.
     return idx[dists.argmin()], is_unique
 
 def scan_valid_indices(vol, df, lx=80, ly=80, lz=32):
     """
-    用原始模式扫描 df 的每一行，找出 nearest_nonzero_idx 答案唯一的有效 case 下标。
-    返回: (valid_indices, skipped_indices)
+    Scan each row of df in the baseline mode and find valid case indices
+    for which nearest_nonzero_idx has a unique answer.
+    Returns: (valid_indices, skipped_indices)
     """
     valid, skipped = [], []
     N = len(df)
-    for ii in tqdm(range(N), desc="扫描有效下标"):
+    for ii in tqdm(range(N), desc="Scanning valid indices"):
         segid1 = df.iloc[ii, 0]
         segid2 = df.iloc[ii, 1]
         cord = np.array(df.iloc[ii, 2].strip('[]').split(','))
@@ -56,12 +57,12 @@ def scan_valid_indices(vol, df, lx=80, ly=80, lz=32):
                    int(y/4 - ly):int(y/4 + ly),
                    int(z - lz):int(z + lz)]
 
-        # vol0 唯一性检查
+        # Uniqueness check for vol0.
         vol0 = np.where(vol_ == segid1, 255, 0).astype(np.uint8)
         cc0  = cc3d.connected_components(vol0[:, :, :, 0], out_dtype=np.uint64)
         _, u0 = nearest_nonzero_idx(cc0, lx, ly, lz)
 
-        # vol1 唯一性检查
+        # Uniqueness check for vol1.
         vol1 = np.where(vol_ == segid2, 255, 0).astype(np.uint8)
         cc1  = cc3d.connected_components(vol1[:, :, :, 0], out_dtype=np.uint64)
         _, u1 = nearest_nonzero_idx(cc1, lx, ly, lz)
@@ -71,7 +72,7 @@ def scan_valid_indices(vol, df, lx=80, ly=80, lz=32):
         else:
             skipped.append(ii)
 
-    print(f"[扫描完成] 有效 case: {len(valid)}, 跳过 case: {len(skipped)}")
+    print(f"[Scan complete] Valid cases: {len(valid)}, skipped cases: {len(skipped)}")
     return valid, skipped
 
 
@@ -91,7 +92,7 @@ def work(vol, valid_indices):
     if os.path.exists(dir_path):
         all_pc = []
         all_ids = []
-        processed_count = 0  # 正常处理的 case 数
+        processed_count = 0  # Number of normally processed cases.
         
         total_time_fetch = 0
         total_time_where = 0
@@ -100,7 +101,7 @@ def work(vol, valid_indices):
         
         from collections import defaultdict
         first = True
-        for ii in tqdm(valid_indices, desc="处理", disable=True):
+        for ii in tqdm(valid_indices, desc="Processing", disable=True):
             # if first:
             #     first = False
             # else:
@@ -111,9 +112,9 @@ def work(vol, valid_indices):
             segid2 = df.iloc[ii, 1]
             cord =np.array(df.iloc[ii,2].strip('[]').split(','))
             x, y, z = [float(cord[0]), float(cord[1]), float(cord[2])]
-            x = int(np.round(x / 4) * 4)  # 四舍五入到最近的4的倍数
-            y = int(np.round(y / 4) * 4)  # 四舍五入到最近的4的倍数
-            z = int(np.round(z))  # 直接四舍五入
+            x = int(np.round(x / 4) * 4)  # Round to the nearest multiple of 4.
+            y = int(np.round(y / 4) * 4)  # Round to the nearest multiple of 4.
+            z = int(np.round(z))  # Round directly.
             cord_start_begin = bbox[0] / np.array([4, 4, 40])
             cord_end_end = bbox[1] / np.array([4, 4, 40])
             cord_end_end = (cord_end_end - cord_start_begin) / np.array([split, split, split]) + cord_start_begin
@@ -133,9 +134,9 @@ def work(vol, valid_indices):
                 total_time_fetch += time.time() - t_start
 
 
-                x = int(np.round(x / 4) * 4)  # 四舍五入到最近的4的倍数
-                y = int(np.round(y / 4) * 4)  # 四舍五入到最近的4的倍数
-                z = int(np.round(z))  # 直接四舍五入
+                x = int(np.round(x / 4) * 4)  # Round to the nearest multiple of 4.
+                y = int(np.round(y / 4) * 4)  # Round to the nearest multiple of 4.
+                z = int(np.round(z))  # Round directly.
 
 
                 t_start = time.time()
@@ -167,7 +168,7 @@ def work(vol, valid_indices):
                     vol1 = vol1.keep_nearest_connected_component_optimized(lx,ly,lz)
                 else:
                     vol1 = cc3d.connected_components(vol1[:, :, :, 0], out_dtype=np.uint64)
-                    nn_idx1, _ = nearest_nonzero_idx(vol1, lx, ly, lz)  # valid_indices 已保证唯一
+                    nn_idx1, _ = nearest_nonzero_idx(vol1, lx, ly, lz)  # valid_indices already guarantees uniqueness.
                     relabel1 = vol1[tuple(nn_idx1)]
                     vol1 = np.where(vol1 == relabel1, 255, 0).astype(np.uint8)
                 total_time_cc += time.time() - t_start
@@ -230,13 +231,13 @@ def work(vol, valid_indices):
 
                 total_time_boundary += time.time() - t_start
 
-            # 汇总本次 work 的所有点云结果
+            # Aggregate all point-cloud results from this work pass.
             if pc_data:
                 all_pc.append(np.vstack(pc_data))
                 all_ids.append(np.array(ids_data))
                 processed_count += 1
 
-        print(f"[耗时分析] Fetch: {total_time_fetch:.4f}s, Where: {total_time_where:.4f}s, CC: {total_time_cc:.4f}s, Boundary: {total_time_boundary:.4f}s")
+        print(f"[Timing] Fetch: {total_time_fetch:.4f}s, Where: {total_time_where:.4f}s, CC: {total_time_cc:.4f}s, Boundary: {total_time_boundary:.4f}s")
 
     result_pc  = np.vstack(all_pc)  if all_pc  else np.zeros((0, 3))
     result_ids = np.concatenate(all_ids) if all_ids else np.array([])
@@ -244,25 +245,25 @@ def work(vol, valid_indices):
 
 
 def compare_results(pc1, ids1, pc2, ids2):
-    """对比两种模式产生的点云结果是否一致。"""
-    print(f"\n[对比] compressed 模式点数: {len(pc1)},  原始模式点数: {len(pc2)}")
+    """Compare whether the point-cloud results produced by the two modes are identical."""
+    print(f"\n[Compare] compressed mode points: {len(pc1)}, baseline mode points: {len(pc2)}")
     if len(pc1) != len(pc2):
-        print("[FAIL] 点云数量不一致！")
+        print("[FAIL] Point counts do not match!")
         return False
 
-    # 按行排序后逐元素比较（两种模式遍历顺序可能不同）
+    # Sort row-wise and compare element by element, since the traversal order may differ between the two modes.
     pc1_sorted  = pc1 [np.lexsort(pc1 [:, ::-1].T)]
     pc2_sorted  = pc2 [np.lexsort(pc2 [:, ::-1].T)]
     ids1_sorted = ids1[np.lexsort(pc1 [:, ::-1].T)]
     ids2_sorted = ids2[np.lexsort(pc2 [:, ::-1].T)]
 
     if np.allclose(pc1_sorted, pc2_sorted, atol=1e-3) and np.array_equal(ids1_sorted, ids2_sorted):
-        print("[PASS] 两种模式结果完全一致 ✓")
+        print("[PASS] The two modes produce exactly the same results.")
         return True
     else:
         diff_mask = ~np.all(np.isclose(pc1_sorted, pc2_sorted, atol=1e-3), axis=1)
-        print(f"[FAIL] 有 {diff_mask.sum()} 个点坐标不一致")
-        print("前5个不一致行（compressed vs 原始）:")
+        print(f"[FAIL] {diff_mask.sum()} point coordinates do not match")
+        print("First five mismatching rows (compressed vs baseline):")
         for idx in np.where(diff_mask)[0][:5]:
             print(f"  {pc1_sorted[idx]}  vs  {pc2_sorted[idx]}")
         return False
@@ -273,10 +274,10 @@ if __name__ == '__main__':
     df = pd.read_csv(candidate_file)
 
     # ------------------------------------------------------------------ #
-    #  预扫描：用原始模式找出所有唯一解的 case 下标                         #
+    #  Prescan: use the baseline mode to find case indices with unique answers.   #
     # ------------------------------------------------------------------ #
     print("=" * 60)
-    print("[预扫描] 初始化原始 CloudVolume 并扫描有效下标...")
+    print("[Prescan] Initialize the baseline CloudVolume and scan valid indices...")
     vol_scan = CloudVolume(
         '/CX/neuro_tracking/fafb-ffn1',
         mip=0,
@@ -290,13 +291,13 @@ if __name__ == '__main__':
     valid_indices=[8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 97, 98, 99, 100, 106, 107, 108, 109, 110, 111, 113, 114]
     print(f"valid_indices={valid_indices}")
     # t_scan1 = time.time()
-    # print(f"[预扫描] 耗时 {t_scan1 - t_scan0:.2f}s，共 {len(valid_indices)} 个有效 case，{len(skipped_indices)} 个跳过 case")
+    # print(f"[Prescan] Elapsed {t_scan1 - t_scan0:.2f}s, {len(valid_indices)} valid cases, {len(skipped_indices)} skipped cases")
 
     # ------------------------------------------------------------------ #
-    #  模式 1：使用压缩块 (USE_COMPRESSED_BLOCK = True)                    #
+    #  Mode 1: use compressed blocks (USE_COMPRESSED_BLOCK = True)        #
     # ------------------------------------------------------------------ #
     print("=" * 60)
-    print("[模式 1] 启动 use_compressed_block=True")
+    print("[Mode 1] Start with use_compressed_block=True")
     USE_COMPRESSED_BLOCK = True
     vol_compressed = CloudVolume(
         '/CX/neuro_tracking/fafb-ffn1',
@@ -311,13 +312,13 @@ if __name__ == '__main__':
     t0 = time.time()
     pc_compressed, ids_compressed, proc1 = work(vol_compressed, valid_indices)
     t1 = time.time()
-    print(f"[模式 1] 完成，耗时 {t1 - t0:.2f}s，共 {len(pc_compressed)} 个点，处理 case: {proc1}")
+    print(f"[Mode 1] Finished in {t1 - t0:.2f}s, {len(pc_compressed)} total points, processed cases: {proc1}")
 
     # ------------------------------------------------------------------ #
-    #  模式 2：不使用压缩块 (USE_COMPRESSED_BLOCK = False)                #
+    #  Mode 2: do not use compressed blocks (USE_COMPRESSED_BLOCK = False) #
     # ------------------------------------------------------------------ #
     print("=" * 60)
-    print("[模式 2] 启动 use_compressed_block=False")
+    print("[Mode 2] Start with use_compressed_block=False")
     USE_COMPRESSED_BLOCK = False
     vol_normal = CloudVolume(
         '/CX/neuro_tracking/fafb-ffn1',
@@ -330,10 +331,10 @@ if __name__ == '__main__':
     t2 = time.time()
     pc_normal, ids_normal, proc2 = work(vol_normal, valid_indices)
     t3 = time.time()
-    print(f"[模式 2] 完成，耗时 {t3 - t2:.2f}s，共 {len(pc_normal)} 个点，处理 case: {proc2}")
+    print(f"[Mode 2] Finished in {t3 - t2:.2f}s, {len(pc_normal)} total points, processed cases: {proc2}")
 
     # ------------------------------------------------------------------ #
-    #  结果对比                                                            #
+    #  Result comparison                                                   #
     # ------------------------------------------------------------------ #
     print("=" * 60)
     compare_results(pc_compressed, ids_compressed, pc_normal, ids_normal)

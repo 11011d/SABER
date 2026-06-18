@@ -18,11 +18,11 @@ void DecompressSlabToBuffer(
     const SlabBlock* blocks, 
     size_t num_blocks,
     int bx, int by, int bz, 
-    int nx_slab, int ny_slab, // 💥 确保这里有两个参数
+    int nx_slab, int ny_slab, // Make sure both parameters are present here.
     T* buffer) 
 {
     int stride_x = nx_slab * bx;
-    // 💥 修正 stride_xy，代表一整个 Z 平面的像素量
+    // Correct stride_xy so it represents the voxel count of a full Z plane.
     size_t stride_xy = (size_t)stride_x * (ny_slab * by);
 
     for (size_t i = 0; i < num_blocks; ++i) {
@@ -52,7 +52,7 @@ void DecompressSlabToBuffer(
             }
 
             if (value != 0) {
-                // 💥 索引计算：x + y*stride_x + z*stride_xy
+                // Index calculation: x + y*stride_x + z*stride_xy.
                 size_t buf_idx = (size_t)(slab_x_origin + lx) + 
                                  (size_t)(slab_y_origin + ly) * stride_x + 
                                  (size_t)lz * stride_xy;

@@ -364,7 +364,7 @@ class ShardReader(object):
     get_indices_info['get_indices_download_time'] = time.time() - start_time
     total_bytes = sum(len(content) for content in binaries.values() if content is not None)
     get_indices_info['get_indices_download_size'] = total_bytes
-    # ---- 3. 解码索引二进制文件 ----
+    # ---- 3. Decode the binary index files ----
     start_time = time.time()
     for (fname, start, end), content in binaries.items():
         try:
@@ -376,7 +376,7 @@ class ShardReader(object):
             fufilled[fname] = None
     get_indices_info['get_indices_gzip_decode'] = time.time() - start_time
 
-    # ---- 打印计时总结 ----
+    # ---- Print the timing summary ----
     get_indices_info['get_indices_total_time'] = time.time() - total_start_time
     get_indices_info['get_indices_download_as_cache_get_time'] = cacheserver_info['download_as_cache_get_time']
     get_indices_info['get_indices_download_as_cache_put_time'] = cacheserver_info['download_as_cache_put_time']
@@ -555,7 +555,7 @@ class ShardReader(object):
       Else:
         return { label_1: OUTPUT, label_2: OUTPUT, ... }
     """
-    # ---- 计时器初始化 ----
+    # ---- Initialize timers ----
     exists_info = {}
     total_start_time = time.time()
     return_one = False
@@ -608,7 +608,7 @@ class ShardReader(object):
               results[label] = filepath
     exists_info['exists_info_label_find'] = time.time() - start_time
     
-    # ---- 打印计时总结 ----
+    # ---- Print the timing summary ----
     exists_info['exists_info_total_time'] = time.time() - total_start_time
     exists_info.update(get_indices_info)
     exists_info.update(get_minishard_indices_info)
@@ -692,7 +692,7 @@ class ShardReader(object):
     del cached
     get_data_info['get_data_info_cache_get_num'] = len(results)
     get_data_info['get_data_info_cache_get'] = time.time() - start_time
-    # ---- 新增: 计算磁盘缓存命中数和命中率 ----
+    # ---- Added: compute disk-cache hits and hit rate ----
     disk_hits = total_requested_labels - len(label)
     start_time = time.time()
     # { label: [ filename, byte start, num_bytes ] }

@@ -123,7 +123,7 @@ def download_sharded_compressed_block(
   io_chunkdata = { k: (meta.encoding(mip), v) for k,v in io_chunkdata.items() } 
   download_sharded_info['download_sharded_get_data_time'] = time.time() - start_time_io
 
-  # 将新获取的数据更新到LRU缓存
+  # Update the LRU cache with the newly fetched data.
   start_time = time.time()
   for zcode, (data_encoding, chunkdata) in io_chunkdata.items():
       lru[zcode] = (data_encoding, chunkdata)
@@ -248,7 +248,7 @@ def download_sharded(
   io_chunkdata = { k: (meta.encoding(mip), v) for k,v in io_chunkdata.items() } 
   download_sharded_info['download_sharded_get_data_time'] = time.time() - start_time_io
 
-  # 将新获取的数据更新到LRU缓存
+  # Update the LRU cache with the newly fetched data.
   start_time = time.time()
   for zcode, (data_encoding, chunkdata) in io_chunkdata.items():
       lru[zcode] = (data_encoding, chunkdata)
@@ -1428,4 +1428,3 @@ def unique_sharded(
       all_labels |= set(labels)
 
   return all_labels
-

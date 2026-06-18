@@ -92,7 +92,7 @@ cdef extern from "decompress_segmentation.h" namespace "compress_segmentation":
         size_t element_size
         const char* order;
 
-  # 声明新的并行解压函数
+  # Declare the new parallel decompression function.
   cdef void DecompressPartialChannelsIntersectionParallel(vector[Request]& requests, int parallel, size_t l2cache_size)
 
 cdef extern from "extract_blocks.h" namespace "compress_segmentation":
@@ -850,7 +850,7 @@ cdef _decompress_partial_helper_in_place_3D(
   """
   decode_shape = volume_size
   if len(decode_shape) == 3:
-    # 扩展到 4D 形状，通道数为 1
+    # Expand to a 4D shape with one channel.
     decode_shape = (volume_size[0], volume_size[1], volume_size[2], 1)
 
   # Cast inputs
@@ -867,15 +867,15 @@ cdef _decompress_partial_helper_in_place_3D(
   cdef ptrdiff_t out_strides[4]
   out_strides[3] = 1
 
-  # 将 NumPy 字节步长转换为元素数量步长
-  # 假设 output_array 的维度是 (X, Y, Z, C)
+  # Convert NumPy byte strides to element-count strides.
+  # Assume output_array has dimensions (X, Y, Z, C).
   for i in range(output_array.ndim):
     out_strides[i] = <ptrdiff_t> (output_array.strides[i] / element_size)
 
-  # 获取底层数据指针
+  # Get the underlying data pointer.
   cdef void* out_data_ptr = <void*>&output_array[0, 0, 0]
 
-  # C++ 函数调用
+  # Call the C++ function.
   if sizeof(UINT) == 4:
     DecompressPartialChannelsIntersectionInPlace[uint32_t](
       uintencodedptr, volsize, blksize,
@@ -905,7 +905,7 @@ cdef _decompress_partial_helper_in_place_4D(
   """
   decode_shape = volume_size
   if len(decode_shape) == 3:
-    # 扩展到 4D 形状，通道数为 1
+    # Expand to a 4D shape with one channel.
     decode_shape = (volume_size[0], volume_size[1], volume_size[2], 1)
 
   # Cast inputs
@@ -922,15 +922,15 @@ cdef _decompress_partial_helper_in_place_4D(
   cdef ptrdiff_t out_strides[4]
   out_strides[3] = 1
 
-  # 将 NumPy 字节步长转换为元素数量步长
-  # 假设 output_array 的维度是 (X, Y, Z, C)
+  # Convert NumPy byte strides to element-count strides.
+  # Assume output_array has dimensions (X, Y, Z, C).
   for i in range(output_array.ndim):
     out_strides[i] = <ptrdiff_t> (output_array.strides[i] / element_size)
 
-  # 获取底层数据指针
+  # Get the underlying data pointer.
   cdef void* out_data_ptr = <void*>&output_array[0, 0, 0, 0]
 
-  # C++ 函数调用
+  # Call the C++ function.
   if sizeof(UINT) == 4:
     DecompressPartialChannelsIntersectionInPlace[uint32_t](
       uintencodedptr, volsize, blksize,
@@ -988,7 +988,7 @@ def decompress_partial_in_place_parallel(
   cdef np.dtype dtype
   cdef tuple output_array_strides
   for req in requests:
-      # 类型和形状校验
+      # Type and shape validation.
       dtype = np.dtype(req['dtype'])
       if dtype not in (np.uint32, np.uint64):
           raise TypeError(f"dtype ({dtype}) must be one of uint32 or uint64.")
@@ -1022,7 +1022,7 @@ def decompress_partial_in_place_parallel(
 
       c_requests.push_back(c_req)
 
-  # 调用C++并行解压函数
+  # Call the C++ parallel decompression function.
   _decompress_parallel_helper(c_requests, parallel, l2cache_size)
 
 cdef _decompress_parallel_helper(vector[Request]& requests, int parallel, size_t l2cache_size):
@@ -1033,7 +1033,7 @@ cdef _decompress_parallel_helper(vector[Request]& requests, int parallel, size_t
     return
 
 
-# --- 1. 针对 uint32 的分发实现 ---
+# --- 1. Dispatcher implementation for uint32 ---
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef void _fill_container_u32_global(
@@ -1070,13 +1070,13 @@ cdef void _fill_container_u32_global(
             if not has_segid:
                 continue
 
-        # 用 nogil 直接转入原生 C++ 代码
+        # Enter native C++ code directly under nogil.
         with nogil:
             ProcessSingleBlockGlobal[uint32_t](
                 blocks[i], rel_grid, nx, ny, local_start, local_end, blksize, arena, arena_nx, arena_nxy, 4
             )
 
-# --- 2. 针对 uint64 的分发实现 ---
+# --- 2. Dispatcher implementation for uint64 ---
 @cython.boundscheck(False)
 @cython.wraparound(False)
 cdef void _fill_container_u64_global(
@@ -1085,7 +1085,7 @@ cdef void _fill_container_u64_global(
     ptrdiff_t[3] rel_grid, BlockArena* arena, int arena_nx, int arena_nxy, object segid_list
 ):
     cdef vector[BlockInfo[uint64_t]] blocks
-    # 强制转换指针类型以匹配 C++ 签名 (依赖于你的 ExtractBlockMetadata 具体实现)
+    # Force-cast pointer types to match the C++ signature (depends on your ExtractBlockMetadata implementation).
     ExtractBlockMetadata[uint64_t](<const uint32_t*>data, volsize, blksize, local_start, local_end, blocks)
     
     cdef size_t nx = (volsize[0] + blksize[0] - 1) // blksize[0]
@@ -1114,13 +1114,13 @@ cdef void _fill_container_u64_global(
             if not has_segid:
                 continue
 
-        # 用 nogil 直接转入原生 C++ 代码
+        # Enter native C++ code directly under nogil.
         with nogil:
             ProcessSingleBlockGlobal[uint64_t](
                 blocks[i], rel_grid, nx, ny, local_start, local_end, blksize, arena, arena_nx, arena_nxy, 8
             )
 
-# --- 3. 核心入口函数：将 chunk 粒度数据解压并裁剪后填入 container ---
+# --- 3. Core entry function: decompress chunk-granularity data, crop it, and fill the container ---
 @cython.binding(True)
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -1128,8 +1128,8 @@ def extract_to_container(
     bytes encoded, volume_size, object dtype,
     chunk_start, chunk_end, request_start, request_end,
     object container, 
-    chunk_relative_grid, # 例如 [0, 8, 0]
-    block_size=(8, 8, 8), # 替换为你的 DEFAULT_BLOCK_SIZE
+    chunk_relative_grid, # for example [0, 8, 0]
+    block_size=(8, 8, 8), # replace with your DEFAULT_BLOCK_SIZE
     segid_list=None
 ):
     dtype = np.dtype(dtype)
@@ -1137,15 +1137,15 @@ def extract_to_container(
     cdef ptrdiff_t intersection_end[3]
     cdef int i
     
-    # 1. 计算 Chunk 与 Request BBox 的全局物理坐标交集
+    # 1. Compute the global physical-coordinate intersection between the chunk and the request bounding box.
     for i in range(3):
         intersection_start[i] = max(chunk_start[i], request_start[i])
         intersection_end[i]   = min(chunk_end[i],   request_end[i])
-        # 如果当前 Chunk 和请求区域在某个维度上毫无交集，直接跳过整个 Chunk
+        # If the current chunk and the request region do not intersect on any dimension, skip the entire chunk.
         if intersection_start[i] >= intersection_end[i]:
             return 
 
-    # 解析编码数据的头部偏移量
+    # Parse the header offsets in the encoded data.
     cdef uint32_t* uintencodedptr = <uint32_t*>((<unsigned char*>encoded))
     cdef uint32_t channel_data_offset = uintencodedptr[0]
     cdef uint32_t* channel_data = uintencodedptr + channel_data_offset
@@ -1154,22 +1154,22 @@ def extract_to_container(
     cdef ptrdiff_t[3] blksize = [block_size[0], block_size[1], block_size[2]]
     cdef ptrdiff_t[3] rel_grid = [chunk_relative_grid[0], chunk_relative_grid[1], chunk_relative_grid[2]]
     
-    # 提取 PyBlockStore 底层的 BlockArena 指针和网格信息
-    # 假设 container 是 Python 侧使用 CompressedVoxelContainer 封装的，其有个 self.blocks （PyBlockStore）
-    # PyBlockStore 内部有个 _arena 指针。我们可以用 Cython 强制转型。
+    # Extract the underlying BlockArena pointer and grid information from PyBlockStore.
+    # Assume container is wrapped by CompressedVoxelContainer on the Python side and has self.blocks (PyBlockStore).
+    # PyBlockStore contains an internal _arena pointer. We can force-cast it with Cython.
     cdef PyBlockStore pystore = <PyBlockStore>(container.blocks)
     cdef BlockArena* arena = pystore._arena
     cdef int arena_nx = container.grid_size[0]
     cdef int arena_nxy = container.grid_size[0] * container.grid_size[1]
     
-    # 2. 将全局交集坐标映射为 Chunk 内部的相对坐标 (局部 BBox)
+    # 2. Map the global intersection coordinates to chunk-relative coordinates (local bounding box).
     cdef ptrdiff_t local_start[3]
     cdef ptrdiff_t local_end[3]
     for i in range(3):
         local_start[i] = intersection_start[i] - chunk_start[i]
         local_end[i]   = intersection_end[i]   - chunk_start[i]
 
-    # 3. 按照数据类型分发给底层引擎
+    # 3. Dispatch to the backend engine according to the data type.
     if dtype == np.uint32:
         _fill_container_u32_global(
             channel_data, volsize, blksize, local_start, local_end, rel_grid, arena, arena_nx, arena_nxy, segid_list
@@ -1201,7 +1201,7 @@ def decompress_block_grid(list block_list, tuple block_size, tuple grid_dims, dt
     cdef uint32_t[:] bstream_view
     cdef const uint32_t* b_ptr
     
-    # 增加 uint8 视图
+    # Add a uint8 view.
     cdef uint8_t[:] pal8
     cdef uint32_t[:] pal32
     cdef uint64_t[:] pal64
@@ -1223,7 +1223,7 @@ def decompress_block_grid(list block_list, tuple block_size, tuple grid_dims, dt
         else:
             b_ptr = NULL
         
-        # 分配前必须强制转换 dtype，否则引发 Buffer mismatch
+        # dtype must be force-cast before allocation, otherwise a Buffer mismatch will occur.
         if target_dtype == np.uint8:
             pal8 = np.ascontiguousarray(b_dict['palette'], dtype=np.uint8)
             DecompressSingleBlock[uint8_t](
@@ -1290,7 +1290,7 @@ def transform_where_compressed(list block_list, dtype, size_t segid,
     cdef int words_needed = (voxels_per_block + 31) // 32
 
     # ==========================================================
-    # 神经元数据是稀疏的，预先分配常数块，消除昂贵的python调用
+    # Neuron data is sparse, so preallocate constant blocks to eliminate expensive Python calls.
     # ==========================================================
     cdef np.ndarray pal_true = np.array([true_val], dtype=out_dtype)
     cdef np.ndarray pal_false = np.array([false_val], dtype=out_dtype)
@@ -1316,10 +1316,10 @@ def transform_where_compressed(list block_list, dtype, size_t segid,
         b_dict = <dict>b_entry
         pal_arr = b_dict['palette']
         pal_size = pal_arr.size
-        itemsize = pal_arr.itemsize  # 瞬间获取底层类型大小，不掉用昂贵的 Numpy 方法
+        itemsize = pal_arr.itemsize  # Instantly obtain the underlying type size without calling expensive NumPy methods.
         # ==========================================================
-        # 零拷贝：直接根据 itemsize 强制取底层指针
-        # 如果寻找的 ID 比调色盘类型能存的最大值还大，直接判 Miss
+        # Zero-copy: directly take the underlying pointer according to itemsize.
+        # If the requested ID is larger than the maximum value supported by the palette type, declare a miss immediately.
         # ==========================================================
         if itemsize == 1:
             if segid > 255: 
@@ -1334,13 +1334,13 @@ def transform_where_compressed(list block_list, dtype, size_t segid,
         else:
             b_type = CheckBlockType[uint64_t](<uint64_t*>np.PyArray_DATA(pal_arr), pal_size, <uint64_t>segid)
 
-        # 逻辑分发：追加全局常量的引用，内存开销为 0！
+        # Logical dispatch: append references to global constants with zero memory overhead.
         if b_type == 0:
             new_blocks.append(MISS_BLOCK)
         elif b_type == 1:
             new_blocks.append(HIT_BLOCK)
         else:
-            # 只有这极少数的混合块，才付出分配内存的代价
+            # Only these very few mixed blocks pay the cost of memory allocation.
             new_bitstream_arr = np.empty(words_needed, dtype=np.uint32)
             
             if b_dict['bits'] > 0:
@@ -1353,7 +1353,7 @@ def transform_where_compressed(list block_list, dtype, size_t segid,
             else:
                 b_ptr = NULL
             
-            # 位流映射
+            # Bitstream remapping.
             if itemsize == 1:
                 CreateGenericBinaryBitstream[uint8_t](
                     b_ptr, <uint8_t*>np.PyArray_DATA(pal_arr), b_dict['bits'], 
@@ -1383,8 +1383,8 @@ def transform_where_compressed(list block_list, dtype, size_t segid,
 @cython.wraparound(False)
 def compress_single_block(np.ndarray dense_data):
     """
-    纯净的单块压缩包装器：直接调用 C++ CompressSingleBlock
-    返回: (bitstream_arr, palette_arr, bits)
+    Pure single-block compression wrapper: directly call C++ CompressSingleBlock.
+    Returns: (bitstream_arr, palette_arr, bits)
     """
     cdef ptrdiff_t blk_sz[3]
     cdef ptrdiff_t strides[3]
@@ -1396,12 +1396,12 @@ def compress_single_block(np.ndarray dense_data):
     cdef uint8_t bits = 0
     cdef object target_dtype = dense_data.dtype
     
-    # 预留不同类型的 Palette Vector
+    # Reserve palette vectors for different types.
     cdef vector[uint8_t] pal_8
     cdef vector[uint32_t] pal_32
     cdef vector[uint64_t] pal_64
     
-    # 根据类型调用 C++ 模板
+    # Call the C++ template according to the type.
     if target_dtype == np.uint8:
         CompressSingleBlock[uint8_t](
             <uint8_t*>dense_data.data, strides, blk_sz, 
@@ -1417,7 +1417,7 @@ def compress_single_block(np.ndarray dense_data):
     else:
         raise ValueError(f"Unsupported dtype: {target_dtype}")
 
-    # --- 将 C++ vector 高效且安全地转换为 Numpy 数组 ---
+    # --- Efficiently and safely convert the C++ vector to a NumPy array ---
     cdef np.ndarray bitstream_arr = np.zeros(bitstream_vec.size(), dtype=np.uint32)
     if bitstream_vec.size() > 0:
         memcpy(np.PyArray_DATA(bitstream_arr), bitstream_vec.data(), bitstream_vec.size() * sizeof(uint32_t))
@@ -1441,7 +1441,7 @@ def compress_single_block(np.ndarray dense_data):
 
 cdef inline void _build_c_blocks(list block_list, vector[CBlock]& c_blocks, int itemsize):
     cdef int i, p_idx
-    cdef bint has_nonzero # 💥 正确的变量名
+    cdef bint has_nonzero # Correct variable name
     cdef dict b_dict
     cdef np.ndarray pal_arr
     cdef uint8_t[:] pal_8
@@ -1457,23 +1457,23 @@ cdef inline void _build_c_blocks(list block_list, vector[CBlock]& c_blocks, int 
         pal_arr = b_dict['palette']
         has_nonzero = False
         
-        # 极速内存视图检查：找非零值！
+        # Fast memory-view check: look for non-zero values.
         if itemsize == 1:
             pal_8 = pal_arr
             for p_idx in range(pal_8.shape[0]):
-                if pal_8[p_idx] != 0:  # 💥 注意这里是 != 0
+                if pal_8[p_idx] != 0:  # Note that this must be != 0.
                     has_nonzero = True
                     break 
         elif itemsize == 4:
             pal_32 = pal_arr
             for p_idx in range(pal_32.shape[0]):
-                if pal_32[p_idx] != 0: # 💥 注意这里是 != 0
+                if pal_32[p_idx] != 0: # Note that this must be != 0.
                     has_nonzero = True
                     break 
         else:
             pal_64 = pal_arr
             for p_idx in range(pal_64.shape[0]):
-                if pal_64[p_idx] != 0: # 💥 注意这里是 != 0
+                if pal_64[p_idx] != 0: # Note that this must be != 0.
                     has_nonzero = True
                     break 
 
@@ -1511,7 +1511,7 @@ def find_nearest_seed_fast(
     cdef bint found = False
 
     with nogil:
-        # 💥 将 include_self 透传给 C++
+        # Pass include_self through to C++.
         if itemsize == 1:
             found = FastNearestSeed[uint8_t](c_blocks.data(), nx_b, ny_b, nz_b, bx, by, bz, req_x, req_y, req_z, q2p_x, q2p_y, q2p_z, cx, cy, cz, seed_x, seed_y, seed_z, include_self)
         elif itemsize == 4:
@@ -1599,7 +1599,7 @@ def fill_slab_buffer_c(list py_blocks, np.ndarray buffer, tuple block_size, tupl
     cdef np.ndarray pal_arr
     cdef int itemsize = np.dtype(dtype).itemsize
 
-    # 1. 解构数据
+    # 1. Unpack the data.
     for i in range(num_blocks):
         item = py_blocks[i]
         if item is None:
@@ -1631,7 +1631,7 @@ def fill_slab_buffer_c(list py_blocks, np.ndarray buffer, tuple block_size, tupl
             else:
                 c_blocks[i].bitstream = NULL
 
-    # 2. 调用 C++ (确保传 8 个参数)
+    # 2. Call C++ (make sure 8 arguments are passed).
     with nogil:
         if itemsize == 1:
             DecompressSlabToBuffer[uint8_t](c_blocks.data(), num_blocks, bx, by, bz, nx_slab, ny_slab, <uint8_t*>buffer.data)
@@ -1676,12 +1676,12 @@ cdef extern from "block_arena.hpp":
 
 
 # ============================================================
-#  PyBlockStore：Cython 扩展类型，封装 BlockArena*
+#  PyBlockStore: a Cython extension type that wraps BlockArena*
 # ============================================================
 cdef class PyBlockStore:
     """
-    将所有压缩 block 数据直接存储在 C++ 管理的内存中，
-    持久维护 CBlock 指针数组，消除每次 C++ 调用前的 Python 层转换。
+    Store all compressed block data directly in C++-managed memory,
+    and persistently maintain the CBlock pointer array to eliminate Python-layer conversions before each C++ call.
     """
     cdef BlockArena* _arena
     cdef object _dtype_obj
@@ -1711,13 +1711,13 @@ cdef class PyBlockStore:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     def set_block(self, int idx, np.ndarray palette, uint8_t bits, object bitstream):
-        """从 NumPy 数组设置一个 Block。"""
+        """Set one block from a NumPy array."""
         cdef np.ndarray bs_arr
         cdef const uint32_t* bs_ptr = NULL
         cdef int bs_words = 0
         cdef const uint8_t* pal_raw = <const uint8_t*>palette.data
         cdef int pal_bytes = palette.size * self._itemsize
-        # 字节级扫描判断是否含非零值
+        # Scan at the byte level to determine whether a non-zero value exists.
         cdef bint has_nz = False
         cdef int j
         for j in range(pal_bytes):
@@ -1734,7 +1734,7 @@ cdef class PyBlockStore:
         self._arena.set_null(idx)
 
     def __getitem__(self, int idx):
-        """返回 dict（兼容旧接口，非热路径）。"""
+        """Return a dict (compatible with the legacy interface, non-hot path)."""
         if idx < 0 or idx >= self._arena.total:
             raise IndexError(f"index {idx} out of range")
         if self._arena.get_is_null(idx) and not self._arena.get_has_nonzero(idx):
@@ -1759,7 +1759,7 @@ cdef class PyBlockStore:
 
 
 # ============================================================
-#  新版热路径函数：直接操作 PyBlockStore
+#  New hot-path functions: operate directly on PyBlockStore
 # ============================================================
 
 @cython.boundscheck(False)
@@ -1772,8 +1772,8 @@ def transform_where_compressed_store(
         object out_dtype,
         tuple block_size):
     """
-    in-place 写入 dst：压缩态 where 映射（src → dst）。
-    直接使用 BlockArena CBlock*，跳过所有 Python dict 操作。
+    Write to dst in place: compressed-domain where mapping (src -> dst).
+    Use BlockArena CBlock* directly and skip all Python dict operations.
     """
     cdef int n = src._arena.total
     cdef const CBlock* src_cb = src._arena.get_cblocks()
@@ -1783,7 +1783,7 @@ def transform_where_compressed_store(
     cdef ptrdiff_t[3] blk_sz = [block_size[0], block_size[1], block_size[2]]
     cdef int words_needed = (blk_sz[0] * blk_sz[1] * blk_sz[2] + 31) // 32
 
-    # 预构建常量 palette 字节（最大 8 字节 = uint64 两元素）
+    # Prebuild constant palette bytes (maximum 8 bytes = two uint64 elements).
     cdef uint8_t pal_false_bytes[8]
     cdef uint8_t pal_true_bytes[8]
     cdef uint8_t pal_mixed_bytes[16]
@@ -1791,7 +1791,7 @@ def transform_where_compressed_store(
     memset(pal_true_bytes,  0, 8)
     memset(pal_mixed_bytes, 0, 16)
 
-    # 将 true_val / false_val 写成小端字节
+    # Write true_val / false_val as little-endian bytes.
     cdef uint64_t tv64 = <uint64_t>int(true_val)
     cdef uint64_t fv64 = <uint64_t>int(false_val)
     memcpy(pal_true_bytes,               <uint8_t*>&tv64, out_itemsize)
@@ -1818,7 +1818,7 @@ def transform_where_compressed_store(
         cb_bitstream = src_cb[i].bitstream
 
         if not cb_hnz:
-            # 全零块 → 必为 miss
+            # All-zero block -> must be a miss.
             dst._arena.set_block(i, pal_false_bytes, out_itemsize, 0, NULL, 0, fv_nonzero)
             continue
 
@@ -1861,7 +1861,7 @@ def find_nearest_seed_fast_store(
         tuple grid_size, tuple block_size, tuple req_size,
         tuple q2p_offset, tuple center, object out_dtype,
         bint include_self=False):
-    """直接使用 BlockArena CBlock*，无需重建临时 vector。"""
+    """Use BlockArena CBlock* directly, without rebuilding temporary vectors."""
     cdef int nx_b = grid_size[0], ny_b = grid_size[1], nz_b = grid_size[2]
     cdef int bx = block_size[0], by = block_size[1], bz = block_size[2]
     cdef int req_x = req_size[0], req_y = req_size[1], req_z = req_size[2]
@@ -1898,7 +1898,7 @@ def extract_cc_fast_store(
         PyBlockStore store,
         tuple grid_size, tuple block_size, tuple req_size,
         tuple q2p_offset, tuple seed_point, object out_dtype):
-    """BFS 连通域提取，结果原地写回 PyBlockStore。"""
+    """Extract connected components with BFS and write the result back to PyBlockStore in place."""
     cdef int nx_b = grid_size[0], ny_b = grid_size[1], nz_b = grid_size[2]
     cdef int bx = block_size[0], by = block_size[1], bz = block_size[2]
     cdef int req_x = req_size[0], req_y = req_size[1], req_z = req_size[2]
@@ -1921,7 +1921,7 @@ def extract_cc_fast_store(
             cc_masks = SparseBFS26[uint64_t](c_blocks, nx_b, ny_b, nz_b, bx, by, bz,
                 req_x, req_y, req_z, q2p_x, q2p_y, q2p_z, sx, sy, sz)
 
-    # 常量调色板字节（miss=[0], hit=[255], mixed=[0,255]）
+    # Constant palette bytes (miss=[0], hit=[255], mixed=[0,255]).
     cdef uint8_t pal_false_bytes[8]
     cdef uint8_t pal_true_bytes[8]
     cdef uint8_t pal_mixed_bytes[16]
@@ -1960,7 +1960,7 @@ def fill_slab_buffer_store(
         tuple block_size, tuple slab_grid_size,
         object dtype, int gz):
     """
-    解压第 gz 层 slab 到 buffer（直接使用 BlockArena CBlock*）。
+    Decompress slab layer gz into the buffer (directly using BlockArena CBlock*).
     """
     cdef int nx_slab = slab_grid_size[0], ny_slab = slab_grid_size[1]
     cdef int bx = block_size[0], by = block_size[1], bz = block_size[2]
@@ -1996,7 +1996,7 @@ def fill_slab_buffer_store(
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def decompress_block_grid_store(PyBlockStore store, tuple block_size, tuple grid_dims, dtype):
-    """从 PyBlockStore 解压完整网格为稠密数组（供 get_raw_data 使用）。"""
+    """Decompress the full grid from PyBlockStore into a dense array (for get_raw_data)."""
     cdef int nx_b = grid_dims[0], ny_b = grid_dims[1]
     cdef np.ndarray out = np.zeros(
         (nx_b * block_size[0], ny_b * block_size[1], grid_dims[2] * block_size[2]),

@@ -15,7 +15,7 @@ struct CBlock {
     bool has_nonzero;
 };
 
-// 极速全块解码器
+// Fast full-block decoder.
 template<typename T>
 void DecodeBlockToCache(const CBlock& b, int voxels_per_block, uint8_t* cache) {
     if (b.bits == 0) {
@@ -31,20 +31,20 @@ void DecodeBlockToCache(const CBlock& b, int voxels_per_block, uint8_t* cache) {
         if ((bitpos % 32) + b.bits > 32) {
             val_idx |= (b.bitstream[bitpos / 32 + 1] << (32 - (bitpos % 32))) & mask;
         }
-        // 💥 变更点：只要不是 0，就在缓存中标记为 1
+        // Key change: mark any non-zero value as 1 in the cache.
         cache[i] = (pal[val_idx] != 0) ? 1 : 0; 
     }
 }
 
 // =========================================================================
-// 💥 新增：C++ 极速寻找最近种子点 (彻底替换 Python 循环)
+// Added: a fast C++ nearest-seed search that completely replaces the Python loop.
 // =========================================================================
 template<typename T>
 bool FastNearestSeed(
     const CBlock* blocks, int nx, int ny, int nz, int bx, int by, int bz,
     int req_x, int req_y, int req_z, int q2p_x, int q2p_y, int q2p_z,
     int cx, int cy, int cz, int& out_sx, int& out_sy, int& out_sz, 
-    bool include_self = false) // 💥 新增参数，默认 false
+    bool include_self = false) // Added parameter, default is false.
 {
     long long min_dist_sq = -1;
     bool found = false;
@@ -89,7 +89,7 @@ bool FastNearestSeed(
                                                         (long long)(py_req - cy)*(py_req - cy) + 
                                                         (long long)(pz_req - cz)*(pz_req - cz);
                                     
-                                    // 💥 核心逻辑：如果排除了自身，且距离为0，直接跳过该点
+                                    // Core logic: if self is excluded and the distance is zero, skip this point directly.
                                     if (!include_self && dist_sq == 0) continue;
                                                         
                                     if (min_dist_sq == -1 || dist_sq < min_dist_sq) {
@@ -111,7 +111,7 @@ bool FastNearestSeed(
 }
 
 // =========================================================================
-// 💥 修复：注入 Offset 偏移量，校准寻路坐标系
+// Fix: inject the offset to align the traversal coordinate system.
 // =========================================================================
 template<typename T>
 std::vector<uint8_t*> SparseBFS26(
@@ -125,7 +125,7 @@ std::vector<uint8_t*> SparseBFS26(
     std::vector<uint8_t*> cc_masks(total_blocks, nullptr);
     std::vector<uint8_t*> cached_masks(total_blocks, nullptr);
 
-    // 修复暗坑：通过 q2p_offset 完美桥接 Query 坐标与 Physical 网格
+    // Fix the hidden pitfall: bridge query coordinates and the physical grid through q2p_offset.
     auto get_indices = [&](int px_req, int py_req, int pz_req, size_t& b_idx, int& v_idx) {
         int full_x = px_req + q2p_x, full_y = py_req + q2p_y, full_z = pz_req + q2p_z;
         int gx = full_x / bx, gy = full_y / by, gz = full_z / bz;
