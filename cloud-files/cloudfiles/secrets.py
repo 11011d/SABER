@@ -1,0 +1,177 @@
+from typing import Dict, Union
+from collections import defaultdict
+import os
+import json
+
+from google.oauth2 import service_account
+
+from .lib import mkdir, colorize
+
+HOME = os.path.expanduser('~')
+
+CV_HOME = os.path.join(HOME, '.cloudvolume')
+CLOUD_VOLUME_DIR = os.environ.get("CLOUD_VOLUME_DIR", CV_HOME)
+CLOUD_VOLUME_SECRETS_DIR = os.path.join(CLOUD_VOLUME_DIR, 'secrets')
+
+CF_HOME = os.path.join(HOME, '.cloudfiles')
+CLOUD_FILES_DIR = os.environ.get("CLOUD_FILES_DIR", CF_HOME)
+CLOUD_FILES_SECRETS_DIR = os.path.join(CLOUD_FILES_DIR, 'secrets')
+
+CLOUD_FILES_LOCK_DIR = os.environ.get("CLOUD_FILES_LOCK_DIR", None)
+
+CredentialType = Dict[str,Union[str,int]]
+CredentialCacheType = Dict[str,CredentialType]
+
+def secretpath(filepath):
+  preferred = os.path.join(CLOUD_VOLUME_SECRETS_DIR, filepath)
+  
+  if os.path.exists(preferred):
+    return preferred
+
+  backcompat = [
+    '/', # original
+    CLOUD_FILES_SECRETS_DIR,
+  ]
+
+  backcompat = [ os.path.join(path, filepath) for path in backcompat ] 
+
+  for path in backcompat:
+    if os.path.exists(path):
+      return path
+
+  return preferred
+
+def default_google_project_name():
+  default_credentials_path = secretpath('google-secret.json')
+  if os.path.exists(default_credentials_path):
+    with open(default_credentials_path, 'rt') as f:
+      return json.loads(f.read())['project_id']
+  return None
+
+PROJECT_NAME = default_google_project_name()
+GOOGLE_CREDENTIALS_CACHE:CredentialCacheType = {}
+google_credentials_path = secretpath('google-secret.json')
+
+def google_credentials(bucket = ''):
+  global PROJECT_NAME
+  global GOOGLE_CREDENTIALS_CACHE
+
+  if bucket in GOOGLE_CREDENTIALS_CACHE.keys():
+    return GOOGLE_CREDENTIALS_CACHE[bucket]
+
+  paths = [
+    secretpath('google-secret.json')
+  ]
+
+  if bucket:
+    paths = [ secretpath('{}-google-secret.json'.format(bucket)) ] + paths
+
+  google_credentials = None
+  project_name = PROJECT_NAME
+  for google_credentials_path in paths:
+    if os.path.exists(google_credentials_path):
+      google_credentials = service_account.Credentials \
+        .from_service_account_file(google_credentials_path)
+      
+      with open(google_credentials_path, 'rt') as f:
+        project_name = json.loads(f.read())['project_id']
+      break
+
+  if google_credentials == None:
+    print(colorize('yellow', 'Using default Google credentials. There is no ~/.cloudvolume/secrets/google-secret.json set.'))  
+    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", None) is None:
+      print(colorize('yellow', 
+      """
+      Warning: Environment variable GOOGLE_APPLICATION_CREDENTIALS is not set.
+        google-cloud-python might not find your credentials. Your credentials
+        might be located in $HOME/.config/gcloud/legacy_credentials/$YOUR_GMAIL/adc.json
+
+        If they are you can export your credentials like so:
+        export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/legacy_credentials/$YOUR_GMAIL/adc.json"
+      """))
+  else:
+    GOOGLE_CREDENTIALS_CACHE[bucket] = (project_name, google_credentials)
+
+  return project_name, google_credentials
+
+AWS_CREDENTIALS_CACHE:CredentialCacheType = defaultdict(dict)
+aws_credentials_path = secretpath('aws-secret.json')
+def aws_credentials(bucket = '', service = 'aws', skip_files=False):
+  global AWS_CREDENTIALS_CACHE
+
+  if service == 's3':
+    service = 'aws'
+
+  if bucket in AWS_CREDENTIALS_CACHE.keys():
+    return AWS_CREDENTIALS_CACHE[bucket]
+
+  default_file_path = '{}-secret.json'.format(service)
+
+  paths = [
+    secretpath(default_file_path)
+  ]
+
+  if bucket:
+    paths = [ secretpath('{}-{}-secret.json'.format(bucket, service)) ] + paths
+
+  aws_credentials = {}
+  if not skip_files:
+    aws_credentials_path = secretpath(default_file_path)
+    for aws_credentials_path in paths:
+      if os.path.exists(aws_credentials_path):
+        with open(aws_credentials_path, 'r') as f:
+          aws_credentials = json.loads(f.read())
+        break
+  
+  if not aws_credentials:
+    # did not find any secret json file, will try to find it in environment variables
+    if 'AWS_ACCESS_KEY_ID' in os.environ and 'AWS_SECRET_ACCESS_KEY' in os.environ:
+      aws_credentials = {
+        'AWS_ACCESS_KEY_ID': os.environ['AWS_ACCESS_KEY_ID'],
+        'AWS_SECRET_ACCESS_KEY': os.environ['AWS_SECRET_ACCESS_KEY'],
+        'AWS_SESSION_TOKEN': os.environ['AWS_SESSION_TOKEN'],
+      }
+    if 'AWS_DEFAULT_REGION' in os.environ:
+      aws_credentials['AWS_DEFAULT_REGION'] = os.environ['AWS_DEFAULT_REGION']
+
+  AWS_CREDENTIALS_CACHE[service][bucket] = aws_credentials
+  return aws_credentials
+
+CAVE_CREDENTIALS:CredentialCacheType = {}
+def cave_credentials(server = ''):
+  global CAVE_CREDENTIALS
+
+  paths = [
+    secretpath('cave-secret.json')
+  ]
+
+  if server:
+    paths = [ secretpath(f'{server}-cave-secret.json') ] + paths
+
+  if server in CAVE_CREDENTIALS:
+    return CAVE_CREDENTIALS.get(server, None)
+
+  for path in paths:
+    if os.path.exists(path):
+      with open(path, 'rt') as f:
+        CAVE_CREDENTIALS[server] = json.loads(f.read())
+      break
+
+  return CAVE_CREDENTIALS.get(server, None)
+
+HTTP_CREDENTIALS = None
+def http_credentials():
+  global HTTP_CREDENTIALS
+  default_file_path = 'http-secret.json'
+  path = secretpath(default_file_path)
+
+  if HTTP_CREDENTIALS:
+    return HTTP_CREDENTIALS
+
+  if os.path.exists(path):
+    with open(path, 'rt') as f:
+      HTTP_CREDENTIALS = json.loads(f.read())
+  else:
+    HTTP_CREDENTIALS = None
+
+  return HTTP_CREDENTIALS

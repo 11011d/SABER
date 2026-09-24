@@ -1,0 +1,893 @@
+CHANGES
+=======
+
+5.4.0
+-----
+
+* test: check nokura works in path parsing
+* install: fix license information
+* fix: expand hardcoded references to "matrix"
+* feat(alias): add "nokura" as an official alias
+
+5.3.2
+-----
+
+* fix: multiprocessing in CloudFiles programatic usage
+* fix: try different multi-processing method (#111)
+
+5.3.0
+-----
+
+* fix: add |fmt: to the normalization routine
+
+5.2.0
+-----
+
+* fix: support |format: style of cloudpaths (#110)
+* fix: correct crc32c representation for s3
+
+5.1.3
+-----
+
+* fix: package metadata
+* fix: deflate returning bytearray from gunzip as well
+
+5.1.2
+-----
+
+* fix: deflate 0.8 started returning a bytearray
+
+5.1.1
+-----
+
+* fix: ensure directory exists for download\_to\_file
+* docs: add why there is this extra bit of code
+* fix(gs/list): show flat directories even if there are no regular entries
+
+5.1.0
+-----
+
+* fix: remove precomputed suffix from cloudfiles during normalization
+* feat: accept the new |neuroglancer-precomputed: suffix
+
+5.0.3
+-----
+
+* docs: describe why this works
+* fix(gcs): flat listing works
+
+5.0.2
+-----
+
+* chore: update changelog
+* feat: add error messages if multiple buckets found
+* fix: stdin wasn't working for cp, mv bc of incorrect source path
+
+5.0.1
+-----
+
+* fix: prevent aws-chunked from populating in Content-Encoding (#109)
+* fix: add head implementation for MemoryInterface
+* fix+test: check that content encoding is transferred correctly
+
+5.0.0
+-----
+
+* feat: efficient saving to disk (#108)
+* install: set minimum version to py39
+* ci: drop py38, add py313
+* fix: strip 'aws-chunked' from s3 encodings
+* fix: add no\_sign\_request for s3 listing
+* fix: prefix logic for no-auth gcs
+* fix: list files google http
+* feat(cli): add no-auth flag to ls
+* fix: abort auth error in list files (http, google)
+* fix: make s3 listing consistent with file and mem
+* fix(list): memory and files interface list flat more consistently
+* test: make flat more consistent in list\_files
+* fix: replaceprefix -> removeprefix
+* fix: aws-chunked does not affect byte encoding
+* fix: harmonizing definition of flat across interfaces
+* feat: adding (broken) support for listing common prefixes
+* refactor: use same pattern for removeprefix
+* fix: make "flat" listing work for s3
+
+4.30.1
+------
+
+* fix(gcs): don't double compress when uploading to gcs w/ composite
+
+4.30.0
+------
+
+* redesign: normalize cloudpaths so file:// isn't required
+
+4.29.0
+------
+
+* feat(size): add return\_sum argument
+
+4.28.1
+------
+
+* fix(CloudFile.join): add definition of join to CloudFile
+
+4.28.0
+------
+
+* feat: add cf.move(s), cf.touch methods and cli mv, touch commands (#107)
+* fix: add drop table stats
+* perf: add in stats table for faster xfer performance
+* feat: import improvements to ResumableFileSet from transcoder
+* fix: release in xfer
+* fix: leasing was broken
+
+4.27.0
+------
+
+* feat: add middleauth+https paths indicate CAVE interface (#106)
+
+4.26.0
+------
+
+* feat: make it possible to normalize e.g. zarr2://./helloworld
+* feat: add all current neuroglancer formats to parsing list
+
+4.25.0
+------
+
+* feat: list for apache servers (#104)
+
+4.24.2
+------
+
+* feat: add size operator to CloudFiles for HTTP interface
+
+4.24.1
+------
+
+* fix: close unused connections for HTTP interface
+
+4.24.0
+------
+
+* fix: check for 404 and use proper key variable
+* test: modify dne test
+* docs: update authors, changelog
+* feat: add support for allow\_missing to interfaces
+* test: check to see if allow\_missing works
+* feat: add allow\_missing to transfer\_to/from
+
+4.23.0
+------
+
+* feat: add content type to transfer\_to/from
+* fix: avoid an error when deleting "parallel" from kwargs
+
+4.22.0
+------
+
+* feat: add no\_sign\_request for s3 services
+* ci: remove py37 add py312
+* fixtest: bump moto version and fix backwards incompatible calls
+* fixtest: files present don't interfere with aws credentials
+* Add support for AWS\_SESSION\_TOKEN (#102)
+* perf: faster path extraction via caching computations
+
+4.21.1
+------
+
+* chore: update ChangeLog
+* fix: annotate other callsites with locks
+* perf: fix potential for multi-thread collision when creating pools
+
+4.21.0
+------
+
+* feat: support non-standard s3 part sizes for multi-part objects
+* Disable internal checksum validation in GCS client (#96)
+
+4.20.1
+------
+
+* fix: CloudFile.put\_json not operative
+
+4.20.0
+------
+
+* fix(cli): missing part\_bytes argument in a few placs
+* test: add CF.get\_json test
+* feat: add CloudFile.get\_json
+* feat: add --part-bytes to cp CLI
+* fixtest: tigerdata -> td
+
+4.19.2
+------
+
+* redesign: tigerdata.princeton.edu is now td.princeton.edu
+
+4.19.1
+------
+
+* feat: add reencode to CloudFiles transfer\_to/from
+* fix: inverted order of arguments for transfer\_from
+
+4.19.0
+------
+
+* feat: add transfer\_to/from support for single files
+* fix(cli): process matrix://bucket without a trailing slash correctly
+
+4.18.1
+------
+
+* test: check that clearing and creating locks works
+* fix: don't crash if lock dir is None when clearing locks
+* docs: how to clear locks
+* feat: add lock mechanisms to CloudFile
+* redesign: reorganize lock\_dir so that it only tests the fs for file://
+* feat: add lock clearing function
+* docs: add credit for Ran Lu
+* docs: describe how to use local file locking
+
+4.18.0
+------
+
+* Use fasteners to lock local files (#91)
+* chore: update changelog
+* fix: improper handling of extensions
+* fix: zero-length file uploads to GCS don't crash
+* Add kwargs to S3Interface (#94)
+
+4.17.2
+------
+
+* fix: not passing compression values correctly to gcs composite upload
+* perf: faster path extraction
+
+4.17.1
+------
+
+* fix: threading error in get\_encoded\_file\_path
+
+4.17.0
+------
+
+* perf: make file writes more efficient
+
+4.16.0
+------
+
+* fix: make sequence testing thread safe
+* perf: avoid using exists when getting files
+* perf: don't use threads for file access
+* fix: allow progress to be a boolean for single threaded
+* chore: update config format
+
+4.15.2
+------
+
+* fix: ensure http secrets is compatible with graphene tokens (#89)
+
+4.15.1
+------
+
+* fix: missing BytesIO import
+
+4.15.0
+------
+
+* perf: better memory usage for file to gs/s3 transfer (#87)
+* fix: add file handle support for MemoryInterface
+
+4.14.0
+------
+
+* docs: describe GCS composite and S3 multi-part uploads
+* docs: update highlights, show cloudfiles
+* install: update supported python versions
+* install: adjust python requires to be 3.7+
+* feat: make s3 multi-part threshold configurable
+* feat: add support for CLOUD\_VOLUME\_DIR and CLOUD\_FILES\_DIR env vars (#83)
+* feat: multi-part s3 upload support (#85)
+* feat: support for GCS composite uploads (#86)
+* feat: add and remove persistent aliases (#84)
+* feat: http basic auth support (#82)
+
+4.13.0
+------
+
+* feat: add clear\_memory function
+
+4.12.1
+------
+
+* feat: add .protocol to CloudFile object
+* chore: update ChangeLog
+
+4.12.0
+------
+
+* feat: simplify interface to ResumableTransfer.init
+* docs: show how to use resumable xfer
+* feat: resumable transfers (#81)
+* feat: multipart validation (#79)
+* fix(mem): clear the real instance when resetting the connection pool
+* fix: CloudFile.put now works
+* build: update python versions tested
+
+4.11.1
+------
+
+* fix(s3): skip empty filenames in list\_files
+
+4.11.0
+------
+
+* feat(CloudFile): add len method and cache size option
+
+4.10.0
+------
+
+* perf: accelerate command line file deletion
+* feat(get): add tagging feature
+* removed the urllib3[secure] extra (#77)
+
+4.9.1
+-----
+
+* feat: support n5 format parsing
+
+4.9.0
+-----
+
+* fixtest: python3.10 must be quoted
+* test: add python3.10 to CI
+* chore: update changelog
+* docs: state that bz2 and xz are supported
+* test: ensure xz and bz2 are tested like the other compression types
+* feat: support xz and bz2 compression
+
+4.8.1
+-----
+
+* fix: cf.puts accepts zip generators
+
+4.8.0
+-----
+
+* feat: adds CloudFile class to represent single files
+
+4.7.5
+-----
+
+* fix: warning on MacOS High Sierra and above related for forking
+* chore: update ChangeLog
+
+4.7.4
+-----
+
+* fix(cli): switch off recursive for single file copy or delete
+
+4.7.3
+-----
+
+* fix(cli rm): fix same bug in cli rm
+
+4.7.2
+-----
+
+* fix(cli cp): recursive flag was mishandling cloud directories
+
+4.7.1
+-----
+
+* fix(transcode): bug that would continue compress/decompress matches
+* feat: add cf.join for joining file paths (#74)
+
+4.6.1
+-----
+
+* fix(S3Interface): release\_connection respects alias (#73)
+
+4.6.0
+-----
+
+* feat: support listing on https://storage.googleapis.com/ (#72)
+* fix: load aliases when needed for to\_https\_protocol
+* perf: faster sorting of file names
+
+4.5.1
+-----
+
+* chore: update changelog
+* fix: don't crash if the aliases.json file is zero bytes
+* fix: don't lose track of aliases in paths.asbucketpath
+
+4.5.0
+-----
+
+* docs(cli): clean up help messages
+* feat: s3 aliases (#70)
+
+4.4.0
+-----
+
+* feat(get): make "start" and "end" optional when using { "path": ... }
+* feat(paths): add normalize function
+* fix: gcs size operator returns None on 404
+
+4.3.0
+-----
+
+* fix: better error if du entry DNE
+* fix(cli): make delete progress more informative
+* feat: add type information (#66)
+
+4.2.0
+-----
+
+* feat(cli): add cat command (#64)
+* feat(cli): adds verify command  (#65)
+
+4.0.0
+-----
+
+* fix: rm -r test could delete test and test2 (#63)
+
+3.1.1
+-----
+
+* fix: range requests blocked by ETag check on S3 (#61)
+
+3.1.0
+-----
+
+* perf(s3): listing single levels of directories is now much faster
+* perf: make listing single levels of directories much faster for GCS
+
+3.0.0
+-----
+
+* redesign: make cp -r work more like ordinary cp (#58)
+* fix: try to ensure that all connections are garbage collected
+* feat(cli): adds stdout to cp (#59)
+* refactor(gcs): download\_as\_string -> download\_as\_bytes
+
+2.0.1
+-----
+
+* chore: update ChangeLog
+* fix: make sure we only replace one instance of https://host..
+* fix: don't delete bucket name from path
+
+2.0.0
+-----
+
+* BREAKING: feat(get): add raise\_errors flag enabled by default (#57)
+
+1.28.1
+------
+
+* chore: update changelog
+* fix(get): generators containing a single item don't crash
+
+1.28.0
+------
+
+* feat(get): adds return\_dict argument
+* chore: update changelog
+* docs: show how to use alternate s3 syntax
+* fix: use\_https plays nice with s3://https://
+
+1.27.2
+------
+
+* fix(head): return None if FileNotFoundError
+* fix(mem): use a consistent path sep on Windows
+* fix(cli:cp): nicer error if source file doesn't exist
+
+1.27.1
+------
+
+* feat: add implementation of "head" to http operators
+* feat: add head method to file protocol
+* fix: transfer paths from windows correctly (#53)
+
+1.27.0
+------
+
+* test(cli:cp): check multiple arguments are allowed, one arg does nothing
+* feat(cli:cp): accept multiple source files to copy
+
+1.26.0
+------
+
+* docs: add credit for anonymous author from https://teppen.io/
+* feat: enable md5 validation for multipart s3 downloads (#50)
+
+1.25.3
+------
+
+* fix: ensure all exceptions are raised (#48)
+
+1.25.2
+------
+
+* chore: bump rsa to working 4.7.2 (the auth bug should be fixed)
+
+1.25.1
+------
+
+* fix: segfault on MacOS parallel & dependency issues (#44)
+* chore: rsa issue fixed in 4.7.1, so only exclude 4.7.0
+
+1.25.0
+------
+
+* feat(requester pays): GCS and S3 (#41)
+* docs: rename "python package" to "test suite"
+* chore: rename python-package to test-suite
+* docs: replace travis badge with actions badge
+* chore: remove travis in favor of github actions
+* fix: ensure test dependencies are installed
+* test: remove flake8 test
+* Create python-package.yml
+
+1.24.1
+------
+
+* fix(external): rsa 4.7 (GCP dep) broken in multi-threading
+
+1.24.0
+------
+
+* docs: show how to use storage class
+* feat: allow user to specify storage\_class for cloud uploads (#39)
+
+1.23.2
+------
+
+* fix: wrong progress text for "head"
+* fix: make progress bar for exists work right
+* chore: update changelog
+
+1.23.1
+------
+
+* fix: sometimes fn is a redundant partial function
+* chore: update changelog
+
+1.23.0
+------
+
+* feat: parallel flag for get, puts, put\_jsons, delete (#37)
+* docs: describe generative expressions
+
+1.22.0
+------
+
+* feat(cli): add --shortpath to ls (we now default to full path)
+* feat(cli): allow rm to read from STDIN
+* feat: add simple generative expressions to cli ls
+* fix: improvements to the ls interface
+
+1.21.0
+------
+
+* docs: show how to use stdin input
+* feat: add progress bar total when possible
+* fix: for stdin strip longest common prefix
+* fix: don't allow copying many files to an existing file
+* feat(cli cp): allow stdin as source
+
+1.20.0
+------
+
+* fix: don't show progress bar for single input
+* feat: add consistent progress bar to dl
+* docs: show how to use dl
+* docs: note that order is guaranteed for get\_json
+* feat: adds dl function
+* fix: preserve order for get\_json (#36)
+* docs: add highlight about libdeflate
+* docs: add note about supported platforms
+* docs: advice about updating pip
+* docs: remove obsolete installation option
+
+1.19.0
+------
+
+* feat(cli): add head command (#33)
+* chore: upgrade deflate to a standard install (#34)
+* chore: update changelog
+
+1.18.1
+------
+
+* fix: set zstd for GCS content-encoding
+* docs: show how to use rm command
+
+1.18.0
+------
+
+* test: add exception for python3.6
+* test: add some tests of the rm cli command
+* fix(secrets): describe use of GOOGLE\_APPLICATION\_CREDENTIALS
+* feat(cli): add rm command
+
+1.17.3
+------
+
+* fix(cli): ensure license file can be found for "cloudfiles license" command
+* fix(cli): broke single file xfer while implementing multiprocessing
+* chore: update changelog
+
+1.17.2
+------
+
+* refactor: make a cloudfiles\_cli package
+* chore: update changelog
+
+1.17.1
+------
+
+* fix: make sure cli can be accessed after installation
+
+1.17.0
+------
+
+* fix: requests isn't matched with urlllib3 1.26.0
+* docs: adjust placement of CLI example
+* feat(cli): added cp, ls, and license commands (#31)
+
+1.16.0
+------
+
+* perf: try using orjson (#29)
+
+1.15.1
+------
+
+* fix: add missing options to put\_jsons
+* chore: update changelog
+
+1.15.0
+------
+
+* perf: use libdeflate to improve gzip decompression (#28)
+* chore: update changelog
+
+1.14.1
+------
+
+* chore: update changelog
+* fix(secrets): don't create empty directories (#27)
+
+1.14.0
+------
+
+* chore: drop python 3.5, adds tests for py3.9
+* fix: make ascloudpath handle https correctly
+* fix(md5): need to check md5 before decompressing
+* fix(MemoryInterface): errors when fetching non-existent file
+* fix(get,get\_json): raise errors for scalar inputs for get
+* refactor: "multiple" misspelled
+* chore: update changelog
+
+1.13.2
+------
+
+* chore: update changelog
+* fix(ascloudpath): incorporates buckets (#25)
+
+0.13.1
+------
+
+* chore: update changelog
+* fix(secrets): correctly parse string and dict secrets
+
+0.13.0
+------
+
+* feat: reenable md5 for GCS (#24)
+* chore: update ChangeLog
+* feat: simplifying the paths engine to support e.g. gs://bucket datasets (#23)
+
+0.12.1
+------
+
+* fix(GCS): disable md5 and crc checking temporarily
+* fix(interfaces): retry should never have been commented out
+* chore: update changelog
+
+0.12.0
+------
+
+* chore: update changelog
+* fix: bump google-crc32c to a fixed version (#20)
+
+0.11.1
+------
+
+* fix(crc32c): call crc32c correctly
+* chore: update changelog
+
+0.11.0
+------
+
+* docs: fix missplaced "API"
+* feat+docs: check crc32c for GCS composite objects (#19)
+* fix(https): error condition was not returning appropriate triple tuple
+* feat: perform md5 integrity checks (#16)
+
+0.10.0
+------
+
+* docs: formatting of transcode
+* feat(size): get byte sizes of files (#17)
+
+0.9.2
+-----
+
+* feat(transfer): add paths argument
+* chore: update changelog
+* fix(transcode): accomodate tuple (filename, content) inputs
+
+0.9.1
+-----
+
+* fix(transcode): accept scalar file arguments
+* chore: update changelog
+
+0.9.0
+-----
+
+* fix: gzip decode had a syntax error
+* feat: add transcode to compression (#15)
+* docs: show how to use raw and total
+* fix: adds raw to cf.put
+* chore: update changelog
+
+0.8.0
+-----
+
+* docs: show how to use zstd
+* test: add zstd to two more tests
+* feat: adds zstd as a supported compressor (#14)
+
+0.7.0
+-----
+
+* perf:  gs and s3 use batch submission for delete (and exists too for gcs) (#13)
+
+0.6.1
+-----
+
+* test: expand compression test
+* chore: add brotli as a dependency
+* docs: fix typo in transfer docs, upload changelog
+
+0.6.0
+-----
+
+* chore: upgrade google storage to 1.30.0
+* docs: mention high efficiency transfers
+* docs: remove caveat from brotli support
+* test: ensure transfer\_to works with strings
+* test: show transfer\_from works
+* feat: allow transfer\_to/transfer\_from to accept cloudpaths
+* perf: skip compress/decompress cycle during transfers (#12)
+* feat: support for brotli on GCS (#11)
+* chore: update changelog
+
+0.5.5
+-----
+
+* fix: ensure desc is a string
+* fix: typo where paths should be total
+* chore: update changelog
+
+0.5.4
+-----
+
+* fix: accept py27 str and unicode types
+
+0.5.3
+-----
+
+* fix: handling generators for exists properly
+
+0.5.2
+-----
+
+* fix: make numpy optional and print warning message if its not installed
+* fix: import error for numpy in JSON decoder
+* docs: remove reference to BOSS from secrets
+
+0.5.1
+-----
+
+* fix: compress was being overridden
+* fix: handle tuples during duplicate detection step
+* chore: update changelog
+
+0.5.0
+-----
+
+* fix: remove pdb statement
+* docs: show how to use slice notation
+* feat: add get slice notation
+* docs: add comments to transfer\_to / transfer\_from
+* feat: add transfer\_to / transfer\_from
+* feat: adds mem:// protocol
+* docs: made green thread usage more clear
+* docs: add travis badge
+
+0.4.1
+-----
+
+* feat: add option for .cloudfiles/secrets instead of .cloudvolume/secrets
+* docs: add credential info to the README
+* fix: make sure to specify aws default region
+* fix: use pbr correctly
+* fix: use setup.py to add [test] option
+* fix: use automated\_test.py
+* fix: add pytest to dev requirements
+* fix: install moto in travis environment
+* test: add s3 mock testing
+* fix: makes sure content is set during error conditions
+* docs: add endpoint
+* docs: describe motivation
+* feat: add ability to control s3 endpoint
+
+0.4.0
+-----
+
+* docs: fix misstatement about how list works
+* docs: show how list works
+* docs: use\_https
+* feat: adds use\_https argument
+* docs: remove useless line below examples
+
+0.3
+---
+
+* docs: condensed and added examples
+* feat: add dict-like features to CloudFiles
+* chore: add ChangeLog
+
+0.2
+---
+
+* test: add tests for delete with generators
+* docs: state that put\_json(s) automatically supplies content\_type
+* docs: ensure all public facing methods have documentation
+* fix: make more functions work with generators properly
+* docs: document puts
+* Revert "refactor: remove unused import"
+* fix: accomodating generators more carefully
+* docs: describe most functions
+* docs: link to how to configure secrets
+* refactor: remove unused import
+* fix: update for the release
+
+0.1
+---
+
+* docs: add highlights and credits
+* refactor: remove dead code and make private methods explicit
+* docs: add some examples
+* chore: update package summary
+* test: add travis
+* refactor: put works with single files while puts does multiples
+* fix: remove CloudFile class for now
+* fix: make sure the correct path separators are used in Windows
+* fix: a simple test of most functions is working
+* feat: add default arguments for compression and cache control
+* fix: got it returning JSON
+* fix: import without errors
+* docs: add empty README
+* wip: first pass getting ready for the testing phase
+* wip: refactoring storage
+* Initial commit

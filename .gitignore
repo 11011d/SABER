@@ -1,0 +1,10 @@
+.eggs/
+build/
+dist/
+*.egg-info/
+*.so
+*.pyc
+__pycache__/
+.pytest_cache/
+.tox/
+cloudvolume-saber-compressed-block.patch

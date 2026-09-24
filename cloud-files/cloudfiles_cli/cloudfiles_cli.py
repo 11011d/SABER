@@ -1,0 +1,1163 @@
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
+from datetime import datetime, timezone
+from functools import partial
+import itertools
+import json
+import re
+import multiprocessing as mp
+import posixpath
+import pprint
+import os.path
+from tqdm import tqdm
+import shutil
+import sys
+
+# Below two lines fix MacOS warning on 
+# High Sierra and above when we are using
+# a thread before forking. Instead, don't fork,
+# spawn entirely new processes.
+mp.set_start_method("spawn", force=True)
+
+import click
+import pathos.pools
+
+import cloudfiles
+import cloudfiles.paths
+from cloudfiles import CloudFiles
+from cloudfiles.monitoring import TransmissionMonitor, IOSampler, IOEnum
+from cloudfiles.resumable_tools import ResumableTransfer
+from cloudfiles.compression import transcode
+from cloudfiles.paths import extract, get_protocol, find_common_buckets
+from cloudfiles.lib import (
+  mkdir, toabs, sip, toiter, 
+  first, red, green,
+  md5_equal
+)
+import cloudfiles.lib
+
+def cloudpathjoin(cloudpath, *args):
+  cloudpath = normalize_path(cloudpath)
+  proto = get_protocol(cloudpath)
+  if proto == "file":
+    # join function can strip "file://"
+    return "file://" + os.path.join(cloudpath, *args).replace("file://", "")
+  else:
+    return posixpath.join(cloudpath, *args)
+
+def normalize_path(cloudpath):
+  if not get_protocol(cloudpath):
+    return "file://" + toabs(cloudpath)
+  return cloudpath
+
+def get_sep(cloudpath):
+  proto = get_protocol(cloudpath)
+  if proto == "file":
+    return os.path.sep
+  else:
+    return "/"
+
+def ispathdir(cloudpath):
+  expath = extract(normalize_path(cloudpath))
+  return (
+    (expath.protocol != "file" and cloudpath[-1] == "/")
+    or (expath.protocol != "file" and expath.path == "" and expath.bucket != "")
+    or (expath.protocol == "file" and cloudpath[-1] == os.path.sep)
+    or (expath.protocol == "file" and os.path.isdir(expath.path))
+  )
+
+@click.group()
+@click.option('-p', '--parallel', default=1, help='Number of parallel processes. <= 0 for all cores.')
+@click.pass_context
+def main(ctx, parallel):
+  parallel = int(parallel)
+  if parallel <= 0:
+    parallel = mp.cpu_count()
+  ctx.ensure_object(dict)
+  ctx.obj["parallel"] = parallel
+
+@main.command()
+def license():
+  """Prints the license for this library and cli tool."""
+  path = os.path.join(os.path.dirname(__file__), 'LICENSE')
+  with open(path, 'rt') as f:
+    print(f.read())
+
+@main.command()
+@click.option('--shortpath', is_flag=True, default=False, help='Don\'t print the common base path for each listed path.',show_default=True)
+@click.option('--flat', is_flag=True, default=False, help='Only produce a single level of directory hierarchy.',show_default=True)
+@click.option('-e','--expr',is_flag=True, default=False, help=r'Use a limited regexp language (e.g. [abc123]{3}) to generate prefixes.', show_default=True)
+@click.option('--no-auth',is_flag=True, default=False, help='Uses the http API for read-only operations.', show_default=True)
+@click.argument("cloudpath")
+def ls(shortpath, flat, expr, cloudpath, no_auth):
+  """Recursively lists the contents of a directory."""
+  cloudpath = normalize_path(cloudpath)
+
+  no_sign_request = no_auth # only affects s3
+  if no_auth and 's3://' not in cloudpath:
+    cloudpath = cloudfiles.paths.to_https_protocol(cloudpath)
+
+  _, flt, prefix, suffix = get_mfp(cloudpath, True)
+  epath = extract(cloudpath)
+  if len(epath.path) > 0:
+    if prefix == "" and flt == False:
+      prefix = os.path.basename(cloudpath)
+    cloudpath = os.path.dirname(cloudpath)
+
+  flat = flat or flt
+
+  cf = CloudFiles(cloudpath, no_sign_request=no_sign_request)
+  iterables = []
+  if expr:
+    # TODO: make this a reality using a parser
+    # match "[abc]{2}" or "[123]" meaning generate a 2 character cartesian
+    # product of a,b, and c or a 1 character cartesian product of 1,2,3
+    # e.g. aa, ab, ac, ba, bb, bc, ca, cb, cc
+    #      1, 2, 3
+    matches = re.findall(r'\[([a-zA-Z0-9]+)\]', prefix)
+
+    if len(matches):
+      iterables.extend(
+        [ cf.list(prefix=pfx, flat=flat) for pfx in exprgen(prefix, matches) ]
+      )
+    else:
+      iterables.append(
+        cf.list(flat=flat)
+      )
+  else:
+    iterables = [ cf.list(prefix=prefix, flat=flat) ]
+
+  iterables = itertools.chain(*iterables)
+
+  if suffix:
+    iterables = ( x for x in iterables if x.endswith(suffix) )
+
+  for pathset in sip(iterables, 1000):
+    if not shortpath:
+      pathset = [ cloudpathjoin(cloudpath, pth) for pth in pathset ]
+    print("\n".join(pathset))
+
+def exprgen(prefix, matches):
+  """
+  Given a string "hello[world]" and matches := ["world"]
+  return ["hellow", "helloo", "hellor", "hellol", "hellod"]
+  """
+  if len(matches) == 0:
+    return [ prefix ]
+
+  match = matches[0]
+  prefixes = []
+  for char in match:
+    prefixes.append(prefix.replace(f"[{match}]", char, 1))
+  
+  finished_prefixes = []
+  for pfx in prefixes:
+    finished_prefixes += exprgen(pfx, matches[1:])
+
+  return finished_prefixes
+
+SUFFIX_REGEXP = re.compile(r'\*([\w\d\-\._]+)$')
+
+def get_mfp(path, recursive):
+  """many,flat,prefix"""
+  path = normalize_path(path)
+  flat = not recursive
+  many = recursive
+  prefix = ""
+  suffix = ""
+
+  matches = SUFFIX_REGEXP.search(path)
+  if matches is not None:
+    suffix = matches.groups()[0]
+    path = path.removesuffix(suffix)
+
+  if path[-2:] == "**":
+    many = True
+    flat = False
+    prefix = os.path.basename(path[:-2])
+  elif path[-1:] == "*":
+    many = True
+    flat = True
+    prefix = os.path.basename(path[:-1])
+
+  return (many, flat, prefix, suffix)
+
+@main.command("mkdir")
+@click.argument("paths", nargs=-1)
+def _mkdir(paths):
+  """
+  Create paths on the local file system.
+  """
+  for path in paths:
+    path = normalize_path(path)
+    protocol = get_protocol(path)
+
+    if protocol == "file":
+      mkdir(path.replace("file://", "", 1))
+
+@main.command()
+@click.argument("source", nargs=-1)
+@click.argument("destination", nargs=1)
+@click.option('-r', '--recursive', is_flag=True, default=False, help='Recursive copy.')
+@click.option('-c', '--compression', default='same', help="Destination compression type. Options: same, none, gzip, br, zstd", show_default=True)
+@click.option('--progress', is_flag=True, default=False, help="Show transfer progress.", show_default=True)
+@click.option('-b', '--block-size', default=128, help="Number of files to download at a time.", show_default=True)
+@click.option('--part-bytes', default=int(1e8), help="Composite upload threshold in bytes. Splits a file into pieces for some cloud services like gs and s3.", show_default=True)
+@click.option('--no-sign-request', is_flag=True, default=False, help="Use s3 in anonymous mode (don't sign requests) for the source.", show_default=True)
+@click.option('--resumable', is_flag=True, default=False, help="http->file transfers will dowload to .part files while they are in progress.", show_default=True)
+@click.option('--flight-time', is_flag=True, default=False, help="Save a Gantt chart of the file transfer to the local directory.", show_default=True)
+@click.option('--io-rate', is_flag=True, default=False, help="Save a chart of bitrate estimated based on file sizes and transmission duration.", show_default=True)
+@click.option('--machine-io-rate', is_flag=True, default=False, help="Save a chart of bitrate based on 4 Hz sampling OS network counters for the entire machine.", show_default=True)
+@click.option('--machine-io-rate-buffer-sec', default=600, help="Circular buffer length in seconds. Only allocated if chart enabled. 1 sec = 96 bytes", show_default=True)
+@click.pass_context
+def cp(
+  ctx, source, destination, 
+  recursive, compression, progress, 
+  block_size, part_bytes, no_sign_request,
+  resumable, 
+  flight_time, io_rate, 
+  machine_io_rate, machine_io_rate_buffer_sec,
+):
+  """
+  Copy one or more files from a source to destination.
+
+  If source is "-" read newline delimited filenames from stdin.
+  If destination is "-" output to stdout.
+  """
+  use_stdout = (destination == '-')
+  if len(source) > 1 and not ispathdir(destination) and not use_stdout:
+    print("cloudfiles: destination must be a directory for multiple source files.")
+    return
+
+  network_sampler = None
+  if machine_io_rate:
+    network_sampler = IOSampler(
+      buffer_sec=machine_io_rate_buffer_sec,
+      interval=0.25,
+    )
+    network_sampler.start_sampling()
+
+  for src in source:
+    _cp_single(
+      ctx, src, destination, recursive, 
+      compression, progress, block_size, 
+      part_bytes, no_sign_request,
+      resumable, flight_time, io_rate,
+    )
+
+  if machine_io_rate:
+    filename = f"./cloudfiles-cp-measured-io-{_timestamp()}.png"
+    network_sampler.stop_sampling()
+    network_sampler.plot_histogram(
+      resolution=1.0,
+      filename=filename,
+    )
+    print(f"Saved chart: {filename}")
+
+def _cp_single(
+  ctx, source, destination, recursive, 
+  compression, progress, block_size,
+  part_bytes, no_sign_request,
+  resumable, gantt, io_rate,
+):
+  use_stdin = (source == '-')
+  use_stdout = (destination == '-')
+
+  if use_stdout:
+    progress = False # can't have the progress bar interfering
+
+  nsrc = normalize_path(source)
+  ndest = normalize_path(destination)
+  
+  issrcdir = (use_stdin == False) and (ispathdir(source) or CloudFiles(nsrc).isdir())
+  isdestdir = (ispathdir(destination) or CloudFiles(ndest).isdir())
+
+  recursive = recursive and issrcdir
+
+  # For more information see:
+  # https://cloud.google.com/storage/docs/gsutil/commands/cp#how-names-are-constructed
+  # Try to follow cp rules. If the directory exists,
+  # copy the base source directory into the dest directory
+  # If the directory does not exist, then we copy into
+  # the dest directory.
+  # Both x* and x** should not copy the base directory
+  if recursive and nsrc[-1] != "*":
+    if isdestdir:
+      if nsrc[-1] == '/':
+        nsrc = nsrc[:-1]
+      ndest = cloudpathjoin(ndest, os.path.basename(nsrc))
+
+  ctx.ensure_object(dict)
+  parallel = int(ctx.obj.get("parallel", 1))
+
+  # The else clause here is to handle single file transfers
+  srcpath = nsrc if issrcdir else os.path.dirname(nsrc)
+  many, flat, prefix, suffix = get_mfp(nsrc, recursive)
+
+  if issrcdir and not many:
+    print(f"cloudfiles: {source} is a directory (not copied).")
+    return
+
+  xferpaths = os.path.basename(nsrc)
+  if use_stdin:
+    xferpaths = sys.stdin.readlines()
+    xferpaths = [ x.replace("\n", "") for x in xferpaths ]
+    prefix = os.path.commonprefix(xferpaths)
+    xferpaths = [ x.replace(prefix, "") for x in xferpaths ]
+    srcpath = prefix
+    if srcpath == "":
+      print(f"cloudfiles: No common prefix found. Currently only one bucket at a time is supported for STDIN.")
+      return
+  elif many:
+    xferpaths = CloudFiles(
+      srcpath, no_sign_request=no_sign_request
+    ).list(prefix=prefix, flat=flat)
+
+  destpath = ndest
+  if isinstance(xferpaths, str):
+    destpath = ndest if isdestdir else os.path.dirname(ndest)
+  elif not isdestdir:
+    if os.path.exists(ndest.replace("file://", "")):
+      print(f"cloudfiles: {ndest} is not a directory (not copied).")
+      return
+
+  if compression == "same":
+    compression = None
+  elif compression == "none":
+    compression = False
+
+  if not isinstance(xferpaths, str):
+    if suffix:
+      xferpaths = ( x for x in xferpaths if x.endswith(suffix) )
+
+    if parallel == 1:
+      _cp(
+        srcpath, destpath, compression,
+        progress, block_size, part_bytes,
+        no_sign_request, resumable, gantt, io_rate, xferpaths
+      )
+      return 
+
+    total = None
+    try:
+      total = len(xferpaths)
+    except TypeError:
+      pass
+
+    if use_stdout:
+      fn = partial(_cp_stdout, srcpath, no_sign_request, False, False)
+    else:
+      fn = partial(
+        _cp, srcpath, destpath, compression, False, 
+        block_size, part_bytes, no_sign_request, resumable, False, False,
+      )
+
+    tms = []
+    with tqdm(desc="Transferring", total=total, disable=(not progress)) as pbar:
+      with pathos.pools.ProcessPool(parallel) as executor:
+        for tm in executor.imap(fn, sip(xferpaths, block_size)):
+          pbar.update(block_size)
+          tms.append(tm)
+
+    tm = TransmissionMonitor.merge(tms)
+    del tms
+  else:
+    cfsrc = CloudFiles(srcpath, progress=progress, no_sign_request=no_sign_request)
+    if not cfsrc.exists(xferpaths):
+      print(f"cloudfiles: source path not found: {cfsrc.abspath(xferpaths).replace('file://','')}")
+      return
+
+    if use_stdout:
+      _cp_stdout(srcpath, no_sign_request, gantt, io_rate, xferpaths)
+      return
+
+    cfdest = CloudFiles(
+      destpath, 
+      progress=progress, 
+      composite_upload_threshold=part_bytes,
+    )
+
+    if isdestdir:
+      new_path = os.path.basename(nsrc)
+    else:
+      new_path = os.path.basename(ndest)
+
+    tm = cfsrc.transfer_to(cfdest, paths=[{
+      "path": xferpaths,
+      "dest_path": new_path,
+    }], reencode=compression, resumable=resumable)
+
+  ts = _timestamp()
+
+  if io_rate:
+    filename = f"./cloudfiles-cp-est-io-{ts}.png"
+    tm.plot_histogram(filename=filename)
+    print(f"Saved chart: {filename}")
+
+  if gantt:
+    filename = f"./cloudfiles-cp-flight-time-{ts}.png"
+    tm.plot_gantt(filename=filename)
+    print(f"Saved chart: {filename}")
+
+def _cp(
+  src, dst, compression, progress, 
+  block_size, part_bytes, 
+  no_sign_request, resumable, gantt, io_rate,
+  paths
+):
+  cfsrc = CloudFiles(src, progress=progress, composite_upload_threshold=part_bytes, no_sign_request=no_sign_request)
+  cfdest = CloudFiles(dst, progress=progress, composite_upload_threshold=part_bytes)
+  tm = cfsrc.transfer_to(
+    cfdest, paths=paths, 
+    reencode=compression, block_size=block_size,
+    resumable=resumable,
+  )
+
+  ts = _timestamp()
+
+  if io_rate:
+    filename = f"./cloudfiles-cp-est-io-{ts}.png"
+    tm.plot_histogram(filename=filename)
+    print(f"Saved chart: {filename}")
+
+  if gantt:
+    filename = f"./cloudfiles-cp-flight-time-{ts}.png"
+    tm.plot_gantt(filename=filename)
+    print(f"Saved chart: {filename}")
+
+  return tm
+
+def _timestamp():
+  now = datetime.now(timezone.utc)
+  return now.strftime("%Y-%m-%d_%H-%M-%S.%f")[:-5] + "Z"
+
+def _cp_stdout(src, no_sign_request, gantt, io_rate, paths):
+  paths = toiter(paths)
+  cf = CloudFiles(src, progress=False, no_sign_request=no_sign_request)
+  results, tm = cf.get(paths, return_recording=True)
+
+  ts = _timestamp()
+
+  if io_rate:
+    tm.plot_histogram(filename=f"./cloudfiles-cp-est-io-{ts}.png")
+
+  if gantt:
+    tm.plot_gantt(filename=f"./cloudfiles-cp-flight-time-{ts}.png")
+
+  for res in results:
+    content = res["content"].decode("utf8")
+    sys.stdout.write(content)
+
+  return tm
+
+@main.command()
+@click.argument("source", nargs=-1)
+@click.argument("destination", nargs=1)
+@click.option('--progress', is_flag=True, default=False, help="Show transfer progress.", show_default=True)
+@click.option('-b', '--block-size', default=128, help="Number of files to download at a time.", show_default=True)
+@click.option('--part-bytes', default=int(1e8), help="Composite upload threshold in bytes. Splits a file into pieces for some cloud services like gs and s3.", show_default=True)
+@click.option('--no-sign-request', is_flag=True, default=False, help="Use s3 in anonymous mode (don't sign requests) for the source.", show_default=True)
+@click.pass_context
+def mv(
+  ctx, source, destination, 
+  progress, block_size, 
+  part_bytes, no_sign_request,
+):
+  """
+  Move one or more files from a source to destination.
+
+  If source is "-" read newline delimited filenames from stdin.
+  If destination is "-" output to stdout.
+  """
+  if len(source) > 1 and not ispathdir(destination):
+    print("cloudfiles: destination must be a directory for multiple source files.")
+    return
+
+  ctx.ensure_object(dict)
+  parallel = int(ctx.obj.get("parallel", 1))
+
+  for src in source:
+    _mv_single(
+      src, destination, 
+      progress, block_size, 
+      part_bytes, no_sign_request,
+      parallel
+    )
+
+def _mv_single(
+  source, destination, 
+  progress, block_size,
+  part_bytes, no_sign_request,
+  parallel
+):
+  use_stdin = (source == '-')
+
+  nsrc = normalize_path(source)
+  ndest = normalize_path(destination)
+
+  issrcdir = (ispathdir(source) or CloudFiles(nsrc).isdir()) and use_stdin == False
+  isdestdir = (ispathdir(destination) or CloudFiles(ndest).isdir())
+
+  ensrc = cloudfiles.paths.extract(nsrc)
+  endest = cloudfiles.paths.extract(ndest)
+
+  if ensrc.protocol == "file" and endest.protocol == "file" and issrcdir:
+    shutil.move(nsrc.replace("file://", ""), ndest.replace("file://", ""))
+    return
+
+  recursive = issrcdir
+
+  # For more information see:
+  # https://cloud.google.com/storage/docs/gsutil/commands/cp#how-names-are-constructed
+  # Try to follow cp rules. If the directory exists,
+  # copy the base source directory into the dest directory
+  # If the directory does not exist, then we copy into
+  # the dest directory.
+  # Both x* and x** should not copy the base directory
+  if recursive and nsrc[-1] != "*":
+    if isdestdir:
+      if nsrc[-1] == '/':
+        nsrc = nsrc[:-1]
+      ndest = cloudpathjoin(ndest, os.path.basename(nsrc))
+
+  # The else clause here is to handle single file transfers
+  srcpath = nsrc if issrcdir else os.path.dirname(nsrc)
+  many, flat, prefix, suffix = get_mfp(nsrc, recursive)
+
+  if issrcdir and not many:
+    print(f"cloudfiles: {source} is a directory (not copied).")
+    return
+
+  xferpaths = os.path.basename(nsrc)
+  if use_stdin:
+    xferpaths = sys.stdin.readlines()
+    xferpaths = [ x.replace("\n", "") for x in xferpaths ]
+    prefix = os.path.commonprefix(xferpaths)
+    xferpaths = [ x.replace(prefix, "") for x in xferpaths ]
+    srcpath = prefix
+    if srcpath == "":
+      print(f"cloudfiles: No common prefix found. Currently only one bucket at a time is supported for STDIN.")
+      return
+  elif many:
+    xferpaths = CloudFiles(
+      srcpath, no_sign_request=no_sign_request
+    ).list(prefix=prefix, flat=flat)
+
+  destpath = ndest
+  if isinstance(xferpaths, str):
+    destpath = ndest if isdestdir else os.path.dirname(ndest)
+  elif not isdestdir:
+    if os.path.exists(ndest.replace("file://", "")):
+      print(f"cloudfiles: {ndest} is not a directory (not copied).")
+      return
+
+  if not isinstance(xferpaths, str):
+    if suffix:
+      xferpaths = ( x for x in xferpaths if x.endswith(suffix) )
+
+    if parallel == 1:
+      _mv(srcpath, destpath, progress, block_size, part_bytes, no_sign_request, xferpaths)
+      return 
+
+    total = None
+    try:
+      total = len(xferpaths)
+    except TypeError:
+      pass
+
+    fn = partial(_mv, srcpath, destpath, False, block_size, part_bytes, no_sign_request)
+
+    with tqdm(desc="Moving", total=total, disable=(not progress)) as pbar:
+      with pathos.pools.ProcessPool(parallel) as executor:
+        for _ in executor.imap(fn, sip(xferpaths, block_size)):
+          pbar.update(block_size)
+  else:
+    cfsrc = CloudFiles(srcpath, progress=progress, no_sign_request=no_sign_request)
+    if not cfsrc.exists(xferpaths):
+      print(f"cloudfiles: source path not found: {cfsrc.abspath(xferpaths).replace('file://','')}")
+      return
+
+    cfdest = CloudFiles(
+      destpath, 
+      progress=progress, 
+      composite_upload_threshold=part_bytes,
+    )
+
+    cfsrc.move(xferpaths, ndest)
+
+def _mv(src, dst, progress, block_size, part_bytes, no_sign_request, paths):
+  cfsrc = CloudFiles(src, progress=progress, composite_upload_threshold=part_bytes, no_sign_request=no_sign_request)
+  cfdest = CloudFiles(dst, progress=progress, composite_upload_threshold=part_bytes)
+  cfsrc.moves(
+    cfdest, paths=paths, block_size=block_size
+  )
+
+@main.command()
+@click.argument("sources", nargs=-1)
+@click.option('--progress', is_flag=True, default=False, help="Show transfer progress.", show_default=True)
+@click.option('--no-sign-request', is_flag=True, default=False, help="Use s3 in anonymous mode (don't sign requests) for the source.", show_default=True)
+@click.pass_context
+def touch(
+  ctx, sources,
+  progress, no_sign_request,
+):
+  """Create file if it doesn't exist."""
+  sources = list(map(normalize_path, sources))
+  sources = [ src.replace("precomputed://", "") for src in sources ]
+  pbar = tqdm(total=len(sources), desc="Touch", disable=(not progress))
+
+  clustered = find_common_buckets(sources)
+
+  with pbar:
+    for bucket, items in clustered.items():
+      cf = CloudFiles(bucket, no_sign_request=no_sign_request, progress=False)
+      cf.touch(items)
+      pbar.update(len(items))
+
+@main.group("xfer")
+def xfergroup():
+  """
+  Create named resumable transfers.
+
+  This is a more reliable version of
+  the cp command for large transfers.
+
+  Resumable transfers can be performed
+  in parallel by multiple clients. They
+  work by saving filenames to a sqlite3
+  database and checking them off.
+
+  To use run:
+
+  1. cloudfiles xfer init ... --db NAME
+
+  2. cloudfiles xfer execute NAME
+  """
+  pass
+
+@xfergroup.command("init")
+@click.argument("source")
+@click.argument("destination")
+@click.option('-c', '--compression', default='same', help="Destination compression type. Options: same, none, gzip, br, zstd", show_default=True)
+@click.option('--db', default=None, required=True, help="Filepath of the sqlite database used for tracking progress. Different databases should be used for each job.")
+def xferinit(source, destination, compression, db):
+  """(1) Create db of files from the source."""
+  if compression == "same":
+    compression = None
+  elif compression == "none":
+    compression = False
+
+  source = normalize_path(source)
+  destination = normalize_path(destination)
+
+  rt = ResumableTransfer(db)
+  rt.init(source, destination, source, compression)
+
+@xfergroup.command("execute")
+@click.argument("db")
+@click.option('--progress', is_flag=True, default=False, help="Show transfer progress.")
+@click.option('--lease-msec', default=0, help="(distributed transfers) Number of milliseconds to lease each task for.", show_default=True)
+@click.option('-b', '--block-size', default=200, help="Number of files to process at a time.", show_default=True)
+def xferexecute(db, progress, lease_msec, block_size):
+  """(2) Perform the transfer using the database.
+
+  Multiple clients can use the same database
+  for execution.
+  """
+  rt = ResumableTransfer(db, lease_msec)
+  rt.execute(progress=progress, block_size=block_size)
+  rt.close()
+
+@main.command()
+@click.argument("sources", nargs=-1)
+@click.option('-r', '--range', 'byte_range', default=None, help='Retrieve start-end bytes.')
+@click.option('--no-sign-request', is_flag=True, default=False, help="Use s3 in anonymous mode (don't sign requests) for the source.", show_default=True)
+def cat(sources, byte_range, no_sign_request):
+  """Concatenate the contents of each input file and write to stdout."""
+  if '-' in sources and len(sources) == 1:
+    sources = sys.stdin.readlines()
+    sources = [ source[:-1] for source in sources ] # clip "\n"
+
+  if byte_range is not None and len(sources) > 1:
+    print("cloudfiles: cat: range argument can only be used with a single source.")
+    return
+  elif byte_range is not None and len(sources):
+    byte_range = byte_range.split("-")
+    byte_range[0] = int(byte_range[0] or 0)
+    byte_range[1] = int(byte_range[1]) if byte_range[1] not in ("", None) else None
+    src = normalize_path(sources[0])
+    cf = CloudFiles(os.path.dirname(src), no_sign_request=no_sign_request)
+    download = cf[os.path.basename(src), byte_range[0]:byte_range[1]]
+    if download is None:
+      print(f'cloudfiles: {src} does not exist')
+      return
+    sys.stdout.write(download.decode("utf8"))
+    return
+
+  for srcs in sip(sources, 10):
+    srcs = [ normalize_path(src) for src in srcs ]
+    order = { src: i for i, src in enumerate(srcs) }
+    files = cloudfiles.dl(srcs, no_sign_request=no_sign_request)
+    output = [ None for _ in range(len(srcs)) ]
+    for res in files:
+      if res["content"] is None:
+        print(f'cloudfiles: {res["path"]} does not exist')
+        return
+      fullpath = normalize_path(res["fullpath"].replace("precomputed://", ""))
+      output[order[fullpath]] = res["content"].decode("utf8")
+    del files
+    for out in output:
+      sys.stdout.write(out)
+
+@main.command()
+@click.argument('paths', nargs=-1)
+@click.option('-r', '--recursive', is_flag=True, default=False, help='Descend into directories.')
+@click.option('--progress', is_flag=True, default=False, help="Show transfer progress.")
+@click.option('-b', '--block-size', default=128, help="Number of files to process at a time.")
+@click.pass_context
+def rm(ctx, paths, recursive, progress, block_size):
+  """
+  Remove file objects.
+
+  Note that if the only path provided is "-",
+  rm will read the paths from STDIN separated by 
+  newlines.
+  """
+  ctx.ensure_object(dict)
+  parallel = int(ctx.obj.get("parallel", 1))
+
+  if len(paths) == 1 and paths[0] == "-":
+    paths = sys.stdin.readlines()
+    paths = [ path[:-1] for path in paths ] # clip "\n"
+
+  singles = []
+  multiples = []
+  for path in paths:
+    many, flat, prefix, suffix = get_mfp(path, recursive)
+    if ispathdir(path) and not many:
+      print(f"cloudfiles: {path}: is a directory.")
+      return
+    if not many:
+      singles.append(path)
+    else:
+      multiples.append(path)
+  del paths
+  
+  _rm_singles(singles, progress, parallel, block_size)
+  for path in multiples:
+    _rm_many(path, recursive, progress, parallel, block_size)
+
+def _rm_singles(paths, progress, parallel, block_size):
+  cfgroups = defaultdict(list)
+  for path in paths:
+    npath = normalize_path(path)
+    extracted = cloudfiles.paths.extract(npath)
+    normalized_protocol = cloudfiles.paths.asprotocolpath(extracted)
+    cfgroups[(normalized_protocol, extracted.bucket)].append(extracted.path)
+  
+  for group, paths in cfgroups.items():
+    cfpath = f"{group[0]}://{group[1]}/"
+
+    if parallel == 1:
+      __rm(cfpath, progress, paths)
+      continue 
+    
+    fn = partial(__rm, cfpath, False)
+    with tqdm(desc="Deleting", disable=(not progress)) as pbar:
+      with pathos.pools.ProcessPool(parallel) as executor:
+        for _ in executor.imap(fn, sip(paths, block_size)):
+          pbar.update(block_size)
+
+def _rm_many(path, recursive, progress, parallel, block_size):
+  npath = normalize_path(path)
+  # the second isdir checks non-file paths, very important!
+  isdir = (ispathdir(path) or CloudFiles(npath).isdir()) 
+  recursive = recursive and isdir
+
+  many, flat, prefix, suffix = get_mfp(path, recursive)
+
+  cfpath = npath if isdir else os.path.dirname(npath)
+  xferpaths = os.path.basename(npath)
+
+  if many:
+    xferpaths = CloudFiles(cfpath).list(prefix=prefix, flat=flat)
+    if suffix:
+      xferpaths = ( x for x in xferpaths if x.endswith(suffix) )
+
+  if parallel == 1 or not many:
+    __rm(cfpath, progress, xferpaths)
+    return 
+  
+  fn = partial(__rm, cfpath, False)
+  with tqdm(desc="Deleting", disable=(not progress)) as pbar:
+    with pathos.pools.ProcessPool(parallel) as executor:
+      for _ in executor.imap(fn, sip(xferpaths, block_size)):
+        pbar.update(block_size)
+
+def __rm(cloudpath, progress, paths):
+  CloudFiles(cloudpath, progress=progress).delete(paths)
+
+@main.command()
+@click.argument('paths', nargs=-1)
+@click.option('-c', '--grand-total', is_flag=True, default=False, help="Sum a grand total of all inputs.")
+@click.option('-s', '--summarize', is_flag=True, default=False, help="Sum a total for each input argument.")
+@click.option('-h', '--human-readable', is_flag=True, default=False, help='"Human-readable" output. Use unit suffixes: Bytes, KiB, MiB, GiB, TiB, PiB, and EiB.')
+def du(paths, grand_total, summarize, human_readable):
+  """Display disk usage statistics."""
+  results = []
+  for path in paths:
+    npath = normalize_path(path)
+    if ispathdir(path):
+      cf = CloudFiles(npath)
+      if summarize:
+        results.append(cf.subtree_size())
+      else:
+        results.append(cf.size(cf.list()))
+    else:
+      cf = CloudFiles(os.path.dirname(npath))
+      sz = cf.size(os.path.basename(npath))
+      if sz is None:
+        print(f"cloudfiles: du: {path} does not exist")
+        return
+      results.append({ path: sz })
+
+  def SI(val):
+    if not human_readable:
+      return val
+
+    if val < 1024:
+      return f"{val} Bytes"
+    elif val < 2**20:
+      return f"{(val / 2**10):.2f} KiB"
+    elif val < 2**30:
+      return f"{(val / 2**20):.2f} MiB"
+    elif val < 2**40:
+      return f"{(val / 2**30):.2f} GiB"
+    elif val < 2**50:
+      return f"{(val / 2**40):.2f} TiB"
+    elif val < 2**60:
+      return f"{(val / 2**50):.2f} PiB"
+    else:
+      return f"{(val / 2**60):.2f} EiB"
+
+  summary = {}
+  for path, res in zip(paths, results):
+    if isinstance(res, int):
+      summary[path] = res
+    else:
+      summary[path] = sum(res.values())
+    if summarize:
+      print(f"{SI(summary[path])}\t{path}")
+
+  if not summarize:
+    for res in results:
+      for pth, size in res.items():
+        print(f"{SI(size)}\t{pth}")
+
+  if grand_total:
+    print(f"{SI(sum(summary.values()))}\ttotal") 
+
+@main.command()
+@click.argument('paths', nargs=-1)
+def head(paths):
+  """Retrieve metadata for one or more files."""
+  results = {}
+  for path in paths:
+    npath = normalize_path(path)
+    npath = re.sub(r'\*+$', '', path)
+    many, flat, prefix, suffix = get_mfp(path, False)
+    if many:
+      cf = CloudFiles(npath)
+      lst = cf.list(prefix=prefix, flat=flat)
+      if suffix:
+        lst = ( x for x in lst if x.endswith(suffix) )
+      res = cf.head(lst)
+      results.update(res)
+    else:
+      cf = CloudFiles(os.path.dirname(npath))
+      results[path] = cf.head(os.path.basename(npath))
+
+  pp = pprint.PrettyPrinter(indent=2)
+
+  if len(paths) == 1 and len(results) == 1:
+    val = first(results.values())
+    if val is not None:
+      print(val)
+    else:
+      print("cloudfiles: head: File not found: {}".format(paths[0]))
+  elif len(paths) > 0:
+    pp.pprint(results)
+
+def populate_md5(
+  cf, metadata, threshold=1e9, 
+  multipart_threshold=None, part_size=None
+):
+  """threshold: parallel download up to this many bytes of files at once"""
+  sz = lambda fname: metadata[fname]["Content-Length"]
+  etag = lambda fname: metadata[fname]["ETag"] 
+  md5content = lambda fname: metadata[fname]["Content-Md5"]
+
+  filenames = list(metadata.keys())
+  filenames = [ fname for fname in filenames if not etag(fname) and not md5content(fname) ]
+
+  while filenames:
+    filename = filenames.pop()
+    paths = [ filename ]
+    size = sz(filename)
+  
+    while filenames and size <= threshold:
+      if size + sz(filenames[-1]) > threshold:
+        break
+      paths.append( filenames.pop() )
+      size += sz(paths[-1])
+
+    results = cf.get(paths, raw=True)
+    for result in results: 
+      filename = result["path"]
+
+      if (
+        (multipart_threshold is not None and part_size is not None)
+        and cf._path.protocol == 's3' 
+        and len(result["content"]) > multipart_threshold
+      ):
+        metadata[filename]["ETag"] = cloudfiles.lib.calc_s3_multipart_etag(result["content"], part_size)
+      else:
+        metadata[filename]["ETag"] = cloudfiles.lib.md5(result["content"], base=64)
+      metadata[filename]["Content-Md5"] = metadata[filename]["ETag"]
+
+  return metadata
+
+@main.command()
+@click.argument("source")
+@click.argument("target")
+@click.option('-m', '--only-matching', is_flag=True, default=False, help="Only check files with matching filenames.", show_default=True)
+@click.option('-v', '--verbose', is_flag=True, default=False, help="Output detailed information of failed matches.", show_default=True)
+@click.option('--md5', is_flag=True, default=False, help="Compute the md5 hash if the Etag is missing. Can be slow!", show_default=True)
+@click.option('--multipart-threshold', default=None, help="For S3, compute multipart hashes for files larger than this size in bytes. If left blank, same as part size.", show_default=True)
+@click.option('--part-size', default=None, help="For S3, compute multipart hashes using this part size in bytes.", show_default=True)
+def verify(source, target, only_matching, verbose, md5, multipart_threshold, part_size):
+  """
+  Validates checksums of two files or two directories 
+  match. These tags are usually either md5 or crc32c 
+  generated strings. These are not secure hashes so they 
+  will only catch accidental changes to files, not 
+  intentionally malicious changes.
+  """
+  source = normalize_path(source)
+  target = normalize_path(target)
+  if ispathdir(source) != ispathdir(target):
+    print("cloudfiles: verify source and target must both be files or directories.")
+    return
+
+  if not md5 and (get_protocol(source) == "file" or get_protocol(target) == "file"):
+    print("cloudfiles: verify source and target must be object storage without --md5 option. The filesystem does not store hash information.")
+    return
+
+  if ispathdir(source):
+    cfsrc = CloudFiles(source)
+    src_files = set(list(cfsrc))
+  else:
+    cfsrc = CloudFiles(os.path.dirname(source))
+    src_files = set([ os.path.basename(source) ])
+  
+  if ispathdir(target):
+    cftarget = CloudFiles(target)
+    target_files = set(list(cftarget))
+  else:
+    cftarget = CloudFiles(os.path.dirname(target))
+    target_files = set([ os.path.basename(target) ])  
+
+  windows = os.path.sep == '\\'
+  normalize_sep = lambda x: set(( 
+    posixpath.join(*fname.split(os.path.sep)) for fname in x 
+  ))
+  if windows:
+    if cfsrc.protocol == "file":
+      src_files = normalize_sep(src_files)
+    if cftarget.protocol == "file":
+      target_files = normalize_sep(target_files)
+  
+  matching_files = src_files.intersection(target_files)
+  mismatched_files = src_files | target_files
+  mismatched_files -= matching_files
+
+  if not only_matching:
+    if len(mismatched_files) > 0:
+      if verbose:
+        print(f"Extra source files:")
+        print("\n".join(src_files - matching_files))
+        print(f"Extra target files:")
+        print("\n".join(target_files - matching_files))
+      print(red(f"failed. {len(src_files)} source files, {len(target_files)} target files."))
+      return
+
+  src_meta = cfsrc.head(matching_files)
+  target_meta = cftarget.head(matching_files)
+
+  if part_size is not None and multipart_threshold is None:
+    multipart_threshold = int(part_size)
+
+  if md5:
+    src_meta = populate_md5(cfsrc, src_meta, multipart_threshold=multipart_threshold, part_size=part_size)
+    target_meta = populate_md5(cftarget, target_meta, multipart_threshold=multipart_threshold, part_size=part_size)
+
+  failed_files = []
+  for filename in src_meta:
+    sm = src_meta[filename]
+    tm = target_meta[filename]
+    if sm["Content-Length"] != tm["Content-Length"]:
+      failed_files.append(filename)
+      continue
+    elif not (
+      (
+        (sm["ETag"] and tm["ETag"])
+        and (
+          sm["ETag"] == tm["ETag"]
+          or md5_equal(sm["ETag"], tm["ETag"])
+        )
+      )
+      or (
+        sm["Content-Md5"] and tm["Content-Md5"]
+        and md5_equal(sm["Content-Md5"], tm["Content-Md5"])
+      )
+    ):
+      failed_files.append(filename)
+      continue
+    elif sm["ETag"] in ("", None):
+      failed_files.append(filename)
+
+  if not failed_files:
+    print(green(f"success. {len(matching_files)} files matching. {len(mismatched_files)} ignored."))
+    return
+
+  if verbose:
+    failed_files.sort()
+
+    header = [
+      "src bytes".ljust(12+1),
+      "target bytes".ljust(12+1),
+      "senc".ljust(4+1),
+      "tenc".ljust(4+1),
+      "src etag".ljust(34+1),
+      "target etag".ljust(34+1),
+      "src md5".ljust(24+1),
+      "target md5".ljust(24+1),
+      "filename"
+    ]
+
+    print("".join(header))
+    for filename in failed_files:
+      sm = src_meta[filename]
+      tm = target_meta[filename]
+      print(f'{sm["Content-Length"]:<12} {tm["Content-Length"]:<12} {sm["Content-Encoding"] or "None":<4} {tm["Content-Encoding"] or "None":<4} {sm["ETag"] or "None":<34} {tm["ETag"] or "None":<34} {sm["Content-Md5"] or "None":<24} {tm["Content-Md5"] or "None":<24} {filename}')
+    print("--")
+
+  print(red(f"failed. {len(failed_files)} failed. {len(matching_files) - len(failed_files)} succeeded. {len(mismatched_files)} ignored."))
+
+@main.group("alias")
+def aliasgroup():
+  """
+  Add, list, and remove aliases for alternate s3 endpoints.
+
+  Aliases can be used to name new protocol prefixes for
+  your system. Be warned that future updates to cloudfiles
+  may claim new "official" protocol prefixes that will
+  override unoffical ones (so pick something obscure).
+
+  Persistent aliases are saved to ~/.cloudfiles/aliases.json
+  
+  Example:
+
+  cloudfiles alias add example s3://https://example.com/
+
+  Which would then be used as:
+
+  cloudfiles head example://bucket/info.txt
+  CloudFiles("example://bucket/").get("info.txt")
+  """
+  pass
+
+@aliasgroup.command("ls")
+def alias_ls():
+  """List all aliases."""
+  aliasfile = cloudfiles.paths.ALIAS_FILE
+  
+  aliases = {}
+  if os.path.exists(aliasfile):
+    with open(aliasfile, "rt") as f:
+      aliases = json.loads(f.read())
+
+  for name,host in cloudfiles.paths.ALIASES.items():
+    aliases[name] = { "host": host }
+
+  for alias, vals in aliases.items():
+    official = ""
+    if alias in cloudfiles.paths.OFFICIAL_ALIASES:
+      official = "(official)"
+
+    alias = f"{alias}://"
+    print(f"{alias:15} -> {vals['host']} {official}")
+  
+  if len(aliases) == 0:
+    print("No aliases.")
+
+@aliasgroup.command("add")
+@click.argument("name")
+@click.argument("host")
+def alias_add(name, host):
+  """Add an unofficial alias.
+
+  Example:
+
+  cloudfiles alias add example s3://https://example.com/
+
+  Which would then be used as:
+
+  cloudfiles head example://bucket/info.txt
+  CloudFiles("example://bucket/").get("info.txt")
+  """
+  aliasfile = cloudfiles.paths.ALIAS_FILE
+  
+  aliases = {}
+  if os.path.exists(aliasfile):
+    with open(aliasfile, "rt") as f:
+      aliases = json.loads(f.read())
+
+  if name in cloudfiles.paths.BASE_ALLOWED_PROTOCOLS:
+    print(f"{name} cannot be aliased.")
+    return
+
+  if name in cloudfiles.paths.ALIASES:
+    print(f"{name} already exists.")
+    return
+
+  # leave room for adding other attributes like ACL
+  aliases[name] = { "host": host } 
+
+  with open(aliasfile, "wt") as f:
+    f.write(json.dumps(aliases))
+
+@aliasgroup.command("rm")
+@click.argument("name")
+def alias_rm(name):
+  """Remove unofficial aliases."""
+  aliasfile = cloudfiles.paths.ALIAS_FILE
+  
+  aliases = {}
+  if os.path.exists(aliasfile):
+    with open(aliasfile, "rt") as f:
+      aliases = json.loads(f.read())
+
+  if name in cloudfiles.paths.OFFICIAL_ALIASES:
+    print("Cannot remove an official alias.")
+    return
+
+  try:
+    del aliases[name]
+
+    with open(aliasfile, "wt") as f:
+      f.write(json.dumps(aliases))
+  except KeyError:
+    pass
+
+
