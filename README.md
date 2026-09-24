@@ -181,19 +181,6 @@ list:
 python benchmarks/saber_compare.py --scan-valid --json-out /tmp/saber_compare_scan.json
 ```
 
-## Latest Benchmark Snapshot
-
-Full FAFAB pairwise extraction with 3D 6-neighbor boundary voxels:
-
-```text
-86958 pair tasks
-52 processes
-chunksize = 8
-sampling disabled
-```
-
-![3D 6-neighbor end-to-end speedup](docs/boundary3d_full_speedup.png)
-
 ## Experiment Script
 
 `test.py` is retained as a lightweight experiment script. Prefer
